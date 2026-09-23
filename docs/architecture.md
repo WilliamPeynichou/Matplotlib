@@ -52,10 +52,15 @@ class RoadNetwork: # columns, rows, nodes (liste plate), segments (liste)
 | Fichier | Fonction | Rôle |
 |---|---|---|
 | generator.py | `generate_network(network, seed)` | chemin principal + branches |
-| generator.py | `generate_path(network, rng, start_node)` | avance colonne par colonne, dy ∈ {-1, 0, 1} |
+| generator.py | `generate_path(network, rng, start, max_steps)` | avance colonne par colonne, dy ∈ {-1, 0, 1} |
+| generator.py | `generate_branches(network, rng, main_path)` | 2 à 4 branches depuis le chemin principal |
+| generator.py | `choose_next(network, rng, current)` | case suivante valide : dans la grille, pas déjà reliée, pas de croisement en X |
+| generator.py | `creates_crossing(network, a, b)` | vrai si la diagonale a → b croise l'autre diagonale du carré |
 | display.py | `draw_node(ax, node)` | un point coloré selon son type |
 | display.py | `draw_network(ax, network)` | tous les segments puis tous les nodes |
-| display.py | `show(network, on_randomize)` | fenêtre + bouton Randomize + animation |
+| display.py | `draw_grid` / `draw_step` / `animate_network` | grille vide, puis un segment par image |
+| display.py | `show(network, seed, on_randomize)` | fenêtre + bouton Randomize + animation |
+| main.py | `create_seed()` | `SEED` fixée ou seed au hasard |
 
 ## Contrat
 
@@ -78,17 +83,21 @@ class RoadNetwork:
     def create_node(self, x: int, y: int) -> Node: ...
     def get_node(self, x: int, y: int) -> Node | None: ...  # None si hors grille
     def is_inside(self, x: int, y: int) -> bool: ...
+    def has_segment(self, a: Node, b: Node) -> bool: ...
     def create_segment(self, a: Node, b: Node) -> Segment | None: ...  # None si doublon
     def reset(self) -> None: ...
     def get_shortest_path(self) -> list[Node]: ...    # bonus F12
 
 # generator.py
 def generate_network(network: RoadNetwork, seed: int) -> None: ...
-def generate_path(network: RoadNetwork, rng: random.Random, start: Node) -> list[Node]: ...
+def generate_path(network: RoadNetwork, rng: random.Random, start: Node,
+                  max_steps: int | None = None) -> list[Node]: ...
+def generate_branches(network: RoadNetwork, rng: random.Random, main_path: list[Node]) -> None: ...
 
 # display.py
 def draw_node(ax, node: Node) -> None: ...
 def draw_network(ax, network: RoadNetwork) -> None: ...
+def animate_network(fig, ax, network: RoadNetwork, seed: int) -> FuncAnimation | None: ...
 def show(network: RoadNetwork, seed: int, on_randomize) -> None: ...  # on_randomize() -> int (nouvelle seed)
 
 # main.py
@@ -101,7 +110,7 @@ Tester sans attendre les autres : fabriquer un petit réseau à la main (3 nodes
 
 1. **Grille** : `columns × rows` nodes UNUSED, créés avec `create_node()`.
 2. **Chemin principal** : START au milieu de la colonne 0. À chaque colonne suivante : monter, rester ou descendre (au hasard, sans sortir). Dernier node = END.
-3. **Branches** : choisir quelques nodes du chemin principal, relancer `generate_path` depuis eux. Si une branche tombe sur un node déjà utilisé, on relie et on s'arrête. Une branche ne crée jamais de 2ᵉ END : elle s'arrête en CONNECTION.
+3. **Branches** : choisir quelques nodes du chemin principal, relancer `generate_path` depuis eux. Si une branche tombe sur un node déjà utilisé, on relie et on s'arrête. Une branche ne crée jamais de 2ᵉ END : elle s'arrête en CONNECTION. Interdit : deux diagonales qui se croisent en X sans node au milieu.
 4. **Types** : `create_segment` met à jour les types automatiquement → les intersections apparaissent toutes seules.
 
 Même fonction pour le chemin principal et les branches = moins de code, moins à expliquer.
