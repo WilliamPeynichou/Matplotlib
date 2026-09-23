@@ -230,6 +230,29 @@ Chaque feature ci-dessous : **But** · **À faire** · **Terminé quand** · **P
 
 ---
 
+## Round 5 – Réglages et circulation
+
+### F14 – Choisir routes et intersections (`generator.py`, `display.py`)
+**But** : régler le réseau avec les curseurs au lieu de changer le code.
+
+**À faire** : curseur routes 1–10, intersections visées 0–15. À chaque changement, refaire des essais avec la même seed et garder celui avec le plus de routes, puis l'écart le plus petit à la cible. Montrer le nombre réel ; signaler si la cible est impossible avec ce nombre de routes.
+
+**Terminé quand** : déplacer les curseurs met à jour le réseau sans fermer la fenêtre. Le titre affiche le résultat réel.
+
+### F15 – Véhicules et règle des 2 secondes (`traffic.py`, `display.py`)
+**But** : faire avancer des points sur le réseau et les faire diverger aux intersections.
+
+**À faire** : curseur 0–20 véhicules ; départs espacés au START ; déplacement continu en suivant les routes courbes. À une intersection, éviter les sorties prises par d'autres véhicules au même node dans les deux dernières secondes. Si toutes les sorties ont été prises, choisir une sortie différente de celle du dernier véhicule. Au bout du réseau, repartir du START. Afficher les véhicules en route et les divergences imposées.
+
+**Limite explicite** : sur une sortie unique, divergence impossible ; le véhicule la prend.
+
+**Terminé quand** : les véhicules bougent, le curseur change leur nombre et le test vérifie la règle.
+
+### F16 – Tester trafic et génération (`check.py`)
+Générer plusieurs réseaux et seeds ; vérifier START/END, grille, doublons, croisements, types, chemin BFS. Simuler des véhicules à pas fixe et contrôler les décisions dans la fenêtre de 2 secondes. Terminé quand `python check.py` affiche `OK`.
+
+---
+
 ## Vérifications à chaque fin de round
 - `python check.py` → OK (dès le round 2).
 - 20 clics Randomize sans erreur.

@@ -1,6 +1,6 @@
 # RoadNetwork
 
-Générateur procédural de réseau routier sur une grille, affiché et animé avec Matplotlib.
+Générateur procédural de réseau routier sur une grille, avec animation de routes et circulation de véhicules.
 Projet du Bootcamp Python B3 – Sup de Vinci 2026-2027.
 
 ![Réseau généré](docs/images/reseau.png)
@@ -14,7 +14,7 @@ Prérequis : Python 3.14.
 python3 -m venv .venv
 ./.venv/bin/python -m pip install -r requirements.txt
 
-# Windows (PowerShell)
+# Windows PowerShell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
@@ -22,23 +22,27 @@ python -m venv .venv
 ## Lancement
 
 ```bash
-./.venv/bin/python main.py        # macOS / Linux
+./.venv/bin/python main.py          # macOS / Linux
 .\.venv\Scripts\python.exe main.py  # Windows
 ```
 
-- La fenêtre s'ouvre et le réseau se construit segment par segment.
-- **Randomize** : génère un nouveau réseau.
-- La seed s'affiche dans le titre et dans le terminal. Pour rejouer un réseau, mettre `SEED = 4821` en haut de `main.py`.
+La fenêtre propose des curseurs pour régler le nombre de routes, le nombre d'intersections visé et le nombre de véhicules. Clique **Randomize** pour changer de réseau. Les véhicules parcourent les routes ; à chaque intersection, ils prennent une autre sortie que le dernier véhicule passé dans les 2 secondes, si une autre sortie existe.
 
-Réglages (constantes en haut des fichiers) :
+La seed apparaît dans le titre et le terminal. Pour rejouer un réseau, mettre `SEED = 4821` dans `main.py`.
 
-| Fichier | Constante | Effet |
-|---|---|---|
-| main.py | `COLUMNS`, `ROWS` | taille de la grille |
-| main.py | `SEED` | `None` = au hasard, un nombre = réseau fixe |
-| generator.py | `MIN_BRANCHES`, `MAX_BRANCHES` | nombre de branches |
-| display.py | `CURVED_ROADS` | routes courbes ou droites |
-| display.py | `ANIMATION_INTERVAL` | vitesse de l'animation (ms) |
+Les intersections sont un nombre **visé** : si la combinaison taille de grille / nombre de routes ne permet pas le nombre demandé, le titre indique le nombre obtenu et le nombre demandé. La génération cherche le meilleur réseau après un nombre limité d'essais.
+
+## Réglages par défaut (`main.py`)
+
+| Constante | Valeur | Rôle |
+|---|---:|---|
+| `COLUMNS`, `ROWS` | 15, 9 | taille de la grille |
+| `SEED` | `None` | au hasard ; un entier rejoue le même réseau |
+| `ROADS` | 4 | nombre de chemins (principal inclus) |
+| `INTERSECTIONS` | 4 | intersections visées |
+| `VEHICLES` | 6 | véhicules |
+
+Réglages avancés dans `display.py` : `SPEED`, `SPAWN_DELAY`, `DIVERGE_WINDOW` dans `traffic.py` ; `CURVED_ROADS`, `CURVE_STRENGTH`, `FRAME_INTERVAL` dans `display.py`.
 
 ## Vérifications
 
@@ -46,44 +50,45 @@ Réglages (constantes en haut des fichiers) :
 ./.venv/bin/python check.py
 ```
 
-Génère 400 réseaux (4 tailles de grille × 100 seeds) et vérifie les règles : 1 START au milieu de la 1ʳᵉ colonne, 1 END dans la dernière, rien hors grille, pas de doublon, pas de croisement en X, types cohérents, plus court chemin valide. Affiche la seed de chaque réseau en erreur, sinon `OK`.
+Teste les réseaux sur plusieurs tailles et seeds : départ/arrivée, liens, croisements, types, plus court chemin et règle de divergence des véhicules.
 
 ## Fonctionnalités
 
-- Grille de nodes et types : Unused, Start, End, Connection, Intersection.
-- Chemin principal START → END, colonne par colonne, déplacements contraints (monter, rester, descendre).
-- 2 à 4 branches qui fusionnent avec les routes existantes → intersections automatiques.
-- Seed reproductible.
-- Bouton Randomize.
-- Animation de la construction.
-- Routes courbes, légende.
-- Plus court chemin START → END (parcours en largeur, BFS) surligné en bleu.
+- Graphe de nodes et segments, cinq types de node.
+- Chemin principal et nombre réglable de routes secondaires.
+- Nombre d'intersections visé réglable ; génération cherche une solution proche.
+- Seed reproductible, Randomize.
+- Construction animée, routes courbes et légende.
+- Plus court chemin START → END (BFS), surligné en bleu.
+- Nombre réglable de véhicules, départs espacés.
+- Règle de divergence : à une intersection, éviter la sortie choisie par un autre véhicule dans les 2 dernières secondes, si une autre sortie est disponible.
 
-![Animation](docs/images/animation.gif)
+![Animation du réseau](docs/images/animation.gif)
 
 ## Architecture
 
-| Fichier | Rôle |
+| Fichier | Responsabilité |
 |---|---|
-| `models.py` | les briques : `NodeType`, `Node`, `Segment` |
-| `network.py` | le plateau : `RoadNetwork` (grille, liens, plus court chemin) |
-| `generator.py` | les règles : chemin principal, branches |
-| `display.py` | l'écran : dessin, animation, bouton |
-| `main.py` | le point d'entrée |
-| `check.py` | l'outil de vérification |
+| `models.py` | NodeType, Node, Segment |
+| `network.py` | grille, liens, plus court chemin |
+| `generator.py` | construction du réseau et branches |
+| `traffic.py` | véhicules, mouvement, décisions de sortie |
+| `display.py` | fenêtre, curseurs, dessin et animation |
+| `main.py` | point d'entrée et réglages par défaut |
+| `check.py` | vérifications automatiques |
 
-Détails et choix justifiés : [docs/architecture.md](docs/architecture.md). Toute la documentation : [docs/](docs/README.md).
+Voir [docs/architecture.md](docs/architecture.md) et [docs/](docs/README.md).
 
 ## Équipe
 
-| Membre | Rôle |
+| Membre | Contribution |
 |---|---|
-| _à compléter_ | Données & réseau |
-| _à compléter_ | Génération |
-| _à compléter_ | Affichage |
+| _à compléter_ | _à compléter_ |
+| _à compléter_ | _à compléter_ |
+| _à compléter_ | _à compléter_ |
 
-## Sources
+## Sources et outils
 
 - Support de cours « Bootcamp Python B3 » – Alexandre Coirier.
-- Documentation Matplotlib (`FuncAnimation`, `widgets.Button`, `patches.PathPatch`).
-- Code réalisé avec l'aide d'un assistant IA (Claake Code), relu et expliqué par l'équipe.
+- Matplotlib : animation, widgets, tracés et patches.
+- Assistance IA utilisée et code relu par l'équipe.

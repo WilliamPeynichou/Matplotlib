@@ -12,7 +12,8 @@ python_b3/
 ├── network.py     # RoadNetwork               (la grille + les liens)
 ├── generator.py   # generate_network()        (le hasard)
 ├── display.py     # draw_network(), bouton    (le dessin)
-└── check.py       # outil de test (feature 7), pas lancé par main
+├── traffic.py     # circulation et décisions aux intersections
+└── check.py       # tests génération + trafic
 ```
 
 Phrase pour l'oral : *« models = les briques, network = le plateau, generator = les règles, display = l'écran, main = le bouton ON. »*
@@ -22,10 +23,19 @@ Phrase pour l'oral : *« models = les briques, network = le plateau, generator =
 ```
 main ──► network, generator, display
 generator ──► network, models
-display ──► network, models
+display ──► network, models, traffic
 network ──► models
+traffic ──► network, models
 ```
 Une seule règle : `generator` ne dessine pas, `display` ne tire pas au hasard.
+
+## Circulation – `traffic.py`
+
+`Traffic` gère le temps, les véhicules et l’historique des sorties empruntées à chaque node. `Vehicle` garde son node courant, sa prochaine destination et sa progression sur le segment. À une intersection, `choose_exit()` écarte les sorties utilisées dans les 2 dernières secondes si une autre est disponible.
+
+## Circulation (`traffic.py`)
+
+`Traffic` gère l’horloge, les véhicules et l’historique des sorties prises par node. Chaque `Vehicle` garde sa position courante, sa prochaine destination et sa progression sur un segment. Quand un véhicule arrive à une intersection, `choose_exit()` cherche les sorties choisies à ce node dans les 2 dernières secondes et essaie d’en prendre une autre.
 
 ## Les classes
 
@@ -132,6 +142,8 @@ Même fonction pour le chemin principal et les branches = moins de code, moins �
 | `RoadNetwork` garde tout | Randomize = `reset()` + regénérer | variables globales |
 | Segments dans l'ordre de création | l'animation rejoue la liste, zéro code en plus | — |
 | `random.Random(seed)` | même seed = même réseau → bug reproductible, démo sûre | `random` global |
+| Historique trafic de 2 secondes | respecter la règle demandée et donner priorité à une sortie différente si elle existe | choisir au hasard sans mémoire |
+| Simulation trafic à temps réel | la position visuelle suit les courbes et la vitesse ne dépend pas directement du nombre d’images | déplacements par image, qui changent avec les performances |
 | Une seule fonction `generate_path` | chemin principal et branches = même règle | deux algos différents |
 | BFS pour le plus court chemin | tous les segments ont le même coût → BFS suffit, plus simple que A* | A*, Dijkstra |
 | Courbes = Bézier à tangentes horizontales | chaque segment va de x à x+1 → routes lisses sans calcul global | lissage de tout le chemin |

@@ -10,6 +10,9 @@ COLUMNS = 15
 ROWS = 9
 SEED = None  # mettre un nombre (ex. 4821) pour rejouer exactement un réseau
 MAX_SEED = 99999
+ROADS = 4  # chemin principal + branches
+INTERSECTIONS = 4  # nombre visé (le plus proche possible)
+VEHICLES = 6
 
 
 def create_seed() -> int:
@@ -22,19 +25,19 @@ def create_seed() -> int:
 def main() -> None:
     """Lance RoadNetwork."""
     network = RoadNetwork(COLUMNS, ROWS)
-    seed = create_seed()
-    generate_network(network, seed)
-    print(f"Seed : {seed}")
+    settings = {"roads": ROADS, "intersections": INTERSECTIONS, "vehicles": VEHICLES}
 
-    def on_randomize() -> int:
-        """Régénère le réseau avec une nouvelle seed et la renvoie."""
-        new_seed = random.randint(0, MAX_SEED)
-        network.reset()
-        generate_network(network, new_seed)
-        print(f"Seed : {new_seed}")
-        return new_seed
+    def generate(seed: int, roads: int, intersections: int) -> int:
+        """Génère le réseau et renvoie le nombre d'intersections obtenu."""
+        count = generate_network(network, seed, roads, intersections)
+        print(f"Seed : {seed}  routes : {roads}  intersections : {count}/{intersections}")
+        return count
 
-    show(network, seed, on_randomize)
+    def new_seed() -> int:
+        """Tire une nouvelle seed pour le bouton Randomize."""
+        return random.randint(0, MAX_SEED)
+
+    show(network, create_seed(), settings, generate, new_seed)
 
 
 if __name__ == "__main__":

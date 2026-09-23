@@ -10,6 +10,14 @@
 7. Une docstring d'une ligne par classe et par fonction.
 8. `main.py` : `main()` + `if __name__ == "__main__":`.
 
+## Paramètres configurables
+
+Les curseurs sont bornés et entiers. Le nombre d’intersections demandé est une cible : si aucune génération ne l’atteint, afficher le nombre réel obtenu. Les véhicules ne peuvent diverger que si le node offre plusieurs sorties.
+
+## Réglages et simulation
+
+Le nombre d’intersections est une cible : afficher le nombre réel obtenu si la cible est impossible. Une sortie unique à une intersection ne permet pas de diverger. Le temps de simulation utilise secondes, avec un `dt` borné pour éviter les grands sauts si la fenêtre bloque.
+
 ## Git
 - `main` marche toujours.
 - Une branche par feature : `feature/F5-chemin`.

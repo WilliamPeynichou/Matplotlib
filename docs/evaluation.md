@@ -10,6 +10,8 @@
 | Évolutions du socle | 2 | 8, 10 |
 | Représentation visuelle | 3 | 4, 11 |
 | Animation | 1 | 9 |
+| Routes et circulation ajoutées | Pas de critère indépendant dans la grille | F14–F16 |
+| Réglages réseau et circulation | Pas de ligne spécifique dans la grille | F14–F16 |
 | Présentation + démo | 1 | planning.md |
 | Compréhension technique | 2 | rotation des rôles + relecture croisée |
 

@@ -1,4 +1,4 @@
-"""Les règles de génération procédurale (features 5 et 8)."""
+"""Les règles de génération procédurale (features 5, 8 et 14)."""
 
 import random
 
@@ -6,29 +6,64 @@ from models import Node, NodeType
 from network import RoadNetwork
 
 MOVES = [-1, 0, 1]  # descendre, rester, monter
-MIN_BRANCHES = 2
-MAX_BRANCHES = 4
+DEFAULT_ROADS = 4  # chemin principal + 3 branches
 MIN_BRANCH_LENGTH = 2
+MAX_ATTEMPTS = 200  # essais pour atteindre le nombre d'intersections demandé
 
 
-def generate_network(network: RoadNetwork, seed: int) -> None:
-    """Génère le chemin principal START -> END, puis les branches."""
+def generate_network(network: RoadNetwork, seed: int, roads: int = DEFAULT_ROADS,
+                     intersections: int | None = None) -> int:
+    """Génère un réseau de `roads` routes. Si `intersections` est donné, fait plusieurs
+    essais et garde le réseau le plus proche. Renvoie le nombre d'intersections obtenu."""
     rng = random.Random(seed)
+    best_state, best_score = None, None
+    for _ in range(MAX_ATTEMPTS if intersections is not None else 1):
+        state = rng.getstate()
+        built = build_network(network, rng, roads)
+        count = count_intersections(network)
+        target = count if intersections is None else intersections
+        score = (roads - built, abs(count - target))  # d'abord toutes les routes, puis l'écart
+        if best_score is None or score < best_score:
+            best_state, best_score = state, score
+        if score == (0, 0):
+            return count
+    rng.setstate(best_state)  # rejoue le meilleur essai (même hasard = même réseau)
+    build_network(network, rng, roads)
+    return count_intersections(network)
+
+
+def build_network(network: RoadNetwork, rng: random.Random, roads: int) -> int:
+    """Un essai : chemin principal + branches. Renvoie le nombre de routes construites."""
+    network.reset()
     start = network.get_node(0, network.rows // 2)
     start.type = NodeType.START
     path = generate_path(network, rng, start)
     path[-1].type = NodeType.END
-    generate_branches(network, rng, path)
+    return 1 + generate_branches(network, rng, roads - 1)
 
 
-def generate_branches(network: RoadNetwork, rng: random.Random, main_path: list[Node]) -> None:
-    """Fait partir quelques branches depuis des nodes du chemin principal."""
-    candidates = main_path[1:-1]  # ni START, ni END
-    count = min(rng.randint(MIN_BRANCHES, MAX_BRANCHES), len(candidates))
+def count_intersections(network: RoadNetwork) -> int:
+    """Nombre de nodes de type INTERSECTION."""
+    return sum(1 for node in network.nodes if node.type is NodeType.INTERSECTION)
+
+
+def generate_branches(network: RoadNetwork, rng: random.Random, count: int) -> int:
+    """Fait partir `count` branches depuis la route existante. Renvoie le nombre réussi."""
     max_length = max(MIN_BRANCH_LENGTH, network.columns // 2)
-    for node in rng.sample(candidates, count):
+    built = 0
+    for _ in range(count):
+        candidates = [
+            node for node in network.nodes
+            if node.type in (NodeType.CONNECTION, NodeType.INTERSECTION)
+            and node.x < network.columns - 1
+        ]
+        if not candidates:
+            break
         length = rng.randint(MIN_BRANCH_LENGTH, max_length)
-        generate_path(network, rng, node, length)
+        branch = generate_path(network, rng, rng.choice(candidates), length)
+        if len(branch) > 1:
+            built += 1
+    return built
 
 
 def generate_path(
