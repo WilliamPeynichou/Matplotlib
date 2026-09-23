@@ -1,4 +1,6 @@
-"""Le plateau : la grille de nodes et les segments qui les relient (feature 3)."""
+"""Le plateau : la grille de nodes et les segments qui les relient (features 3 et 12)."""
+
+from collections import deque
 
 from models import Node, NodeType, Segment
 
@@ -57,6 +59,37 @@ class RoadNetwork:
             node.segments = []
             node.type = NodeType.UNUSED
 
+    def get_start(self) -> Node | None:
+        """Renvoie le node START, ou None s'il n'y en a pas."""
+        for node in self.nodes:
+            if node.type is NodeType.START:
+                return node
+        return None
+
     def get_shortest_path(self) -> list[Node]:
-        """Plus court chemin START -> END (bonus, feature 12)."""
+        """Plus court chemin START -> END en nombre de segments (parcours en largeur, BFS)."""
+        start = self.get_start()
+        if start is None:
+            return []
+        queue = deque([start])
+        parents = {start: None}  # node -> node d'où on vient ; sert aussi de "déjà visités"
+        while queue:
+            node = queue.popleft()
+            if node.type is NodeType.END:
+                return self.build_path(parents, node)
+            for segment in node.segments:
+                neighbor = segment.end if segment.start is node else segment.start
+                if neighbor not in parents:
+                    parents[neighbor] = node
+                    queue.append(neighbor)
         return []
+
+    def build_path(self, parents: dict, end: Node) -> list[Node]:
+        """Remonte les parents depuis END pour reconstruire le chemin START -> END."""
+        path = []
+        node = end
+        while node is not None:
+            path.append(node)
+            node = parents[node]
+        path.reverse()
+        return path

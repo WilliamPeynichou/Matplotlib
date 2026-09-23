@@ -60,6 +60,8 @@ class RoadNetwork: # columns, rows, nodes (liste plate), segments (liste)
 | display.py | `draw_network(ax, network)` | tous les segments puis tous les nodes |
 | display.py | `draw_grid` / `draw_step` / `animate_network` | grille vide, puis un segment par image |
 | display.py | `show(network, seed, on_randomize)` | fenêtre + bouton Randomize + animation |
+| display.py | `draw_shortest_path` / `draw_legend` / `setup_axes` | chemin surligné, légende, repère |
+| network.py | `get_shortest_path()` | BFS START → END : file d'attente + dict des parents |
 | main.py | `create_seed()` | `SEED` fixée ou seed au hasard |
 
 ## Contrat
@@ -86,7 +88,9 @@ class RoadNetwork:
     def has_segment(self, a: Node, b: Node) -> bool: ...
     def create_segment(self, a: Node, b: Node) -> Segment | None: ...  # None si doublon
     def reset(self) -> None: ...
-    def get_shortest_path(self) -> list[Node]: ...    # bonus F12
+    def get_start(self) -> Node | None: ...
+    def get_shortest_path(self) -> list[Node]: ...    # bonus F12 : BFS
+    def build_path(self, parents: dict, end: Node) -> list[Node]: ...
 
 # generator.py
 def generate_network(network: RoadNetwork, seed: int) -> None: ...
@@ -129,6 +133,8 @@ Même fonction pour le chemin principal et les branches = moins de code, moins �
 | Segments dans l'ordre de création | l'animation rejoue la liste, zéro code en plus | — |
 | `random.Random(seed)` | même seed = même réseau → bug reproductible, démo sûre | `random` global |
 | Une seule fonction `generate_path` | chemin principal et branches = même règle | deux algos différents |
+| BFS pour le plus court chemin | tous les segments ont le même coût → BFS suffit, plus simple que A* | A*, Dijkstra |
+| Courbes = Bézier à tangentes horizontales | chaque segment va de x à x+1 → routes lisses sans calcul global | lissage de tout le chemin |
 | Constantes en haut du fichier qui les utilise | pas de fichier en plus, facile à trouver | `config.py` séparé |
 
 ## Ce qu'on ne fait pas

@@ -51,6 +51,14 @@ def check_network(network: RoadNetwork) -> list[str]:
         if a.y != b.y and network.has_segment(network.get_node(a.x, b.y), network.get_node(b.x, a.y)):
             errors.append(f"{segment} croise une diagonale")
 
+    path = network.get_shortest_path()
+    if not path or path[0].type is not NodeType.START or path[-1].type is not NodeType.END:
+        errors.append("plus court chemin START -> END introuvable")
+    elif len(path) != network.columns:
+        errors.append(f"plus court chemin de {len(path)} nodes au lieu de {network.columns}")
+    elif any(not network.has_segment(a, b) for a, b in zip(path, path[1:])):
+        errors.append("plus court chemin passe par un lien inexistant")
+
     for node in network.nodes:
         if node.type in (NodeType.START, NodeType.END):
             if not node.segments:
