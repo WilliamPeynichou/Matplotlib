@@ -15,4 +15,4 @@
 
 Bonus (+0,5 chacun) : algo avancé → 12, visu enrichie → 11, documentation → 13 + docs/.
 
-Malus : retard −3, crash au lancement −3 (tester le ZIP sur un autre PC), code copié −2.
+Malus : retard −3, crash au lancement −3 (tester le ZIP sur un autre PC), code copié et non compris −2 (IA autorisée, mais chacun doit savoir expliquer le code).

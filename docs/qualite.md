@@ -23,3 +23,5 @@
 
 ## Honnêteté
 Pas de copier-coller non compris (malus −2). Chacun doit pouvoir expliquer tout le projet.
+
+L'IA est autorisée par le prof. Condition : son usage est mentionné dans le README, et chaque ligne générée est relue et comprise par le groupe. Le malus −2 vise le code **non compris**, IA ou pas.
