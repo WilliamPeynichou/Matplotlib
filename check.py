@@ -33,6 +33,11 @@ def check_network(network: RoadNetwork) -> list[str]:
     if ends and ends[0].x != network.columns - 1:
         errors.append("END n'est pas dans la dernière colonne")
 
+    exits = {id(segment.start) for segment in network.segments}
+    for node in network.nodes:
+        if node.type not in (NodeType.UNUSED, NodeType.END) and id(node) not in exits:
+            errors.append(f"cul-de-sac ({node.x}, {node.y}) : n'atteint pas le END")
+
     seen = set()
     for segment in network.segments:
         a, b = segment.start, segment.end

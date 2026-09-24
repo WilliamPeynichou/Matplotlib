@@ -108,7 +108,7 @@ Chaque feature ci-dessous : **But** · **À faire** · **Terminé quand** · **P
 **But** : générer la route principale START → END.
 
 **À faire**
-1. `generate_path(network, rng, start)` :
+1. `find_path(network, rng, start)` :
    - part de `start`, avance d'une colonne à chaque tour ;
    - `dy = rng.choice([-1, 0, 1])`, on force à rester dans la grille (si `y + dy` sort, on prend `dy = 0`) ;
    - relie le node courant au suivant avec `create_segment()` ;
@@ -116,7 +116,7 @@ Chaque feature ci-dessous : **But** · **À faire** · **Terminé quand** · **P
 2. `generate_network(network, seed)` :
    - `rng = random.Random(seed)` ;
    - START = `get_node(0, rows // 2)` ;
-   - `path = generate_path(...)` ;
+   - `path = find_path(...)` ;
    - dernier node du chemin → END.
 
 **Terminé quand** : sur 20 générations, START toujours au milieu de la 1ʳᵉ colonne, END toujours dans la dernière, jamais hors grille.
@@ -166,16 +166,16 @@ Chaque feature ci-dessous : **But** · **À faire** · **Terminé quand** · **P
 
 **À faire**
 1. Après le chemin principal, choisir 2 à 4 nodes au hasard sur ce chemin (pas START, pas END).
-2. Depuis chacun, relancer `generate_path()` (même fonction) avec une longueur limitée.
+2. Depuis chacun, relancer `find_path()` (même fonction) : la branche vise le END et s'arrête en retombant sur la route. Aucun cul-de-sac.
 3. Si la branche arrive sur un node déjà utilisé : on crée le segment puis on s'arrête (fusion).
 4. Une branche ne devient jamais END : elle se termine en CONNECTION.
 5. Les intersections apparaissent seules grâce à `create_segment()` + `update_type()`.
 
 **Terminé quand** : réseaux avec plusieurs chemins et des intersections visibles, `check.py` toujours OK.
 
-**Pièges** : branche qui repart en arrière et boucle (ajouter un paramètre de longueur max) ; branche qui écrase END.
+**Pièges** : branche qui finit en cul-de-sac (ne garder que les cases d'où le END reste atteignable) ; branche qui écrase END.
 
-**À l'oral** : réutiliser `generate_path` = une seule règle à expliquer.
+**À l'oral** : réutiliser `find_path` = une seule règle à expliquer.
 
 ### F9 – Animation (`display.py`) – 1 point
 **But** : voir le réseau se construire.

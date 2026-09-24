@@ -20,7 +20,7 @@ Générer un réseau routier sur une grille (nodes + segments) et l'afficher ave
 | Imposé par le cours (PDF) | Proposé par nous (modifiable) |
 |---|---|
 | Python 3.14, `.venv`, `matplotlib==3.11.2` | découpage en 5 fichiers |
-| graphe nodes + segments, 5 types de node | noms `generate_path`, `show`, `get_node`, `is_inside` |
+| graphe nodes + segments, 5 types de node | noms `find_path`, `show`, `get_node`, `is_inside` |
 | `create_node()`, `create_segment()`, `draw_node()` | rôles A / B / C |
 | START au milieu de la 1ʳᵉ colonne, chemin colonne par colonne | règles qualité (anglais, < 25 lignes, branches Git) |
 | bouton Randomize, seed, branches, intersections | 11 slides, ~10 min |

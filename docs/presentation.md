@@ -14,7 +14,7 @@ Règle : chaque membre présente **la partie qu'il a codée** (A = données, B =
 | 3 | Les 5 types de node | A | 40 s | UNUSED, START, END, CONNECTION, INTERSECTION + couleur | légende colorée |
 | 4 | Architecture | A | 1 min 30 | 5 fichiers. Phrase : « briques / plateau / règles / écran / ON ». Une seule règle : generator ne dessine pas, display ne tire pas au hasard | schéma des imports |
 | 5 | Les classes | A | 1 min | Node, Segment, RoadNetwork. `create_segment()` met à jour les types tout seul | mini-diagramme des classes |
-| 6 | Algorithme | B | 2 min | 4 étapes : grille → chemin principal → branches → types automatiques. Même fonction `generate_path` pour tout | 4 captures, une par étape |
+| 6 | Algorithme | B | 2 min | 4 étapes : grille → chemin principal → branches → types automatiques. Même fonction `find_path` pour tout | 4 captures, une par étape |
 | 7 | Seed | B | 40 s | même seed = même réseau → bug reproductible | 2 captures identiques |
 | 8 | Affichage et animation | C | 1 min | couleurs par type, bouton Randomize, segments animés | capture + GIF |
 | 9 | Difficultés | B + C | 1 min | 1 ou 2 vrais bugs : symptôme → cause → correction | capture du bug |
