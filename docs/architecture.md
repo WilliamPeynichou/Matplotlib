@@ -149,6 +149,7 @@ Même fonction pour le chemin principal et les branches = moins de code, moins �
 | Une seule fonction `find_path` | chemin principal et branches = même règle | deux algos différents |
 | BFS pour le plus court chemin | tous les segments ont le même coût → BFS suffit, plus simple que A* | A*, Dijkstra |
 | Courbes = Bézier à tangentes horizontales | chaque segment va de x à x+1 → routes lisses sans calcul global | lissage de tout le chemin |
+| Décalage organique seulement à l'écran (`get_position`) | les règles (grille, pas de X) restent simples et testées ; `JITTER < 0.5` garde l'ordre des nodes → aucun croisement visuel. Décalage tiré de `seed + case` → reproductible | déplacer les nodes dans le modèle (règles et tests à refaire) |
 | Constantes en haut du fichier qui les utilise | pas de fichier en plus, facile à trouver | `config.py` séparé |
 
 ## Ce qu'on ne fait pas

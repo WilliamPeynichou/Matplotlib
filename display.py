@@ -1,5 +1,6 @@
 """L'écran : dessin, animation, curseurs et véhicules (features 4, 6, 9, 11, 14, 15)."""
 
+import random
 import time
 
 import matplotlib.pyplot as plt
@@ -41,6 +42,8 @@ VEHICLE_COLORS = ["#8E44AD", "#E67E22", "#16A085", "#C0392B", "#2980B9", "#D3540
                   "#27AE60", "#7F8C8D", "#F1C40F", "#E84393"]
 VEHICLE_SIZE = 70
 CURVED_ROADS = True  # False = segments droits
+JITTER = 0.3  # décalage max à l'écran ; < 0.5 garde l'ordre des nodes (aucun croisement)
+layout = {"seed": 0}  # seed du décalage, changée à chaque réseau
 CURVE_STRENGTH = 0.5  # 0 = droit, 0.5 = courbe douce
 FRAME_INTERVAL = 50  # millisecondes entre deux images (20 fps : fluide, CPU raisonnable)
 SEGMENTS_PER_FRAME = 1  # vitesse de construction
@@ -51,16 +54,25 @@ MAX_INTERSECTIONS = 15
 MAX_VEHICLES = 20
 
 
+def get_position(node: Node) -> tuple[float, float]:
+    """Position à l'écran : la case de la grille + un petit décalage au hasard (aspect organique).
+    Même seed + même case = même décalage. Le modèle, lui, reste sur la grille."""
+    rng = random.Random(f"{layout['seed']}-{node.x}-{node.y}")
+    return (node.x + rng.uniform(-JITTER, JITTER), node.y + rng.uniform(-JITTER, JITTER))
+
+
 def get_curve_points(a: Node, b: Node) -> list[tuple[float, float]]:
     """4 points de contrôle d'une courbe de Bézier à tangentes horizontales (a à gauche)."""
-    bend = CURVE_STRENGTH * (b.x - a.x)
-    return [(a.x, a.y), (a.x + bend, a.y), (b.x - bend, b.y), (b.x, b.y)]
+    (ax_, ay), (bx, by) = get_position(a), get_position(b)
+    bend = CURVE_STRENGTH * (bx - ax_)
+    return [(ax_, ay), (ax_ + bend, ay), (bx - bend, by), (bx, by)]
 
 
 def get_point_on_segment(a: Node, b: Node, t: float) -> tuple[float, float]:
     """Position à t (0 -> 1) sur la route a -> b, en suivant la même forme que le dessin."""
-    if not CURVED_ROADS or a.y == b.y:
-        return a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t
+    if not CURVED_ROADS:
+        (x0, y0), (x1, y1) = get_position(a), get_position(b)
+        return x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
     if a.x > b.x:
         a, b, t = b, a, 1 - t
     (x0, y0), (x1, y1), (x2, y2), (x3, y3) = get_curve_points(a, b)
@@ -76,19 +88,20 @@ def draw_segment(ax, segment: Segment, color: str = ROAD_COLOR, width: float = R
     a, b = segment.start, segment.end
     if a.x > b.x:
         a, b = b, a  # toujours dessiner de gauche à droite
-    if CURVED_ROADS and a.y != b.y:
+    if CURVED_ROADS:
         codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
         ax.add_patch(PathPatch(Path(get_curve_points(a, b), codes), fill=False,
                                edgecolor=color, linewidth=width, capstyle="round",
                                zorder=zorder))
     else:
-        ax.plot([a.x, b.x], [a.y, b.y], color=color, linewidth=width,
+        (x0, y0), (x1, y1) = get_position(a), get_position(b)
+        ax.plot([x0, x1], [y0, y1], color=color, linewidth=width,
                 solid_capstyle="round", zorder=zorder)
 
 
 def draw_node(ax, node: Node) -> None:
     """Dessine un node avec la couleur et la taille de son type."""
-    ax.plot(node.x, node.y, marker="o", color=COLORS[node.type],
+    ax.plot(*get_position(node), marker="o", color=COLORS[node.type],
             markersize=SIZES[node.type], markeredgecolor="white", zorder=3)
 
 
@@ -130,7 +143,7 @@ def draw_grid(ax, network: RoadNetwork, title: str) -> None:
     ax.axis("off")
     draw_legend(ax)
     for node in network.nodes:
-        ax.plot(node.x, node.y, marker="o", color=COLORS[NodeType.UNUSED],
+        ax.plot(*get_position(node), marker="o", color=COLORS[NodeType.UNUSED], alpha=0.5,
                 markersize=SIZES[NodeType.UNUSED], zorder=2)
 
 
@@ -149,7 +162,7 @@ def get_vehicle_positions(traffic: Traffic) -> list[tuple[float, float]]:
     positions = []
     for vehicle in traffic.get_moving():
         if vehicle.target is None:
-            positions.append((vehicle.current.x, vehicle.current.y))
+            positions.append(get_position(vehicle.current))
         else:
             positions.append(get_point_on_segment(vehicle.current, vehicle.target,
                                                   vehicle.progress))
@@ -231,6 +244,7 @@ class NetworkView:
         """Arrête l'animation en cours et en démarre une nouvelle."""
         if self.animation is not None:
             self.animation.stop()
+        layout["seed"] = self.seed  # nouveau réseau = nouvelle forme organique
         draw_grid(self.ax, self.network, self.get_title())
         self.built = 0
         if not build:

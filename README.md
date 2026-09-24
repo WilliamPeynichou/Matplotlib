@@ -66,6 +66,7 @@ Grille invalide (`COLUMNS < 2` ou `ROWS < 1`) : le programme affiche un message 
 - Nombre d'intersections visé réglable ; génération cherche une solution proche.
 - Seed reproductible, Randomize.
 - Construction animée, routes courbes et légende.
+- Aspect organique : chaque node est légèrement décalé à l'écran (`JITTER` dans `display.py`), même seed = même forme. Le modèle reste une grille, donc les règles et les tests ne changent pas.
 - Toutes les routes rejoignent le END (aucun cul-de-sac).
 - Animation optimisée (blitting : seuls les véhicules sont redessinés).
 - Plus court chemin START → END (BFS), surligné en bleu.
