@@ -245,6 +245,7 @@ class NetworkView:
         if self.animation is not None:
             self.animation.stop()
         layout["seed"] = self.seed  # nouveau réseau = nouvelle forme organique
+        self.path_length = self.network.get_shortest_path_length()
         draw_grid(self.ax, self.network, self.get_title())
         self.built = 0
         if not build:
@@ -304,7 +305,8 @@ class NetworkView:
         if positions:
             self.vehicle_artist.set_facecolors([self.vehicle_colors[v.number] for v in moving])
         self.info.set_text(f"Véhicules en route : {len(moving)}  ·  "
-                           f"divergences (fenêtre 2 s) : {self.traffic.forced_divergences}")
+                           f"divergences (fenêtre 2 s) : {self.traffic.forced_divergences}  ·  "
+                           f"plus court chemin : {self.path_length} segments")
 
 
 def show(network: RoadNetwork, seed: int, settings: dict, generate, new_seed) -> None:

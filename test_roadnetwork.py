@@ -91,3 +91,13 @@ def test_grille_invalide_message_clair(columns, rows):
 
 def test_vehicules_divergent_dans_la_fenetre_de_2_secondes():
     assert check_divergence() == []
+
+
+def test_longueur_plus_court_chemin():
+    network = build(seed=1, intersections=3)
+    assert network.get_shortest_path_length() == len(network.get_shortest_path()) - 1
+
+
+def test_longueur_plus_court_chemin_sans_reseau():
+    network = RoadNetwork(3, 3)
+    assert network.get_shortest_path_length() == 0

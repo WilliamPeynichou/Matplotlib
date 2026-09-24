@@ -87,6 +87,11 @@ class RoadNetwork:
                     queue.append(neighbor)
         return []
 
+    def get_shortest_path_length(self) -> int:
+        """Longueur du plus court chemin START -> END, en nombre de segments (0 si aucun)."""
+        path = self.get_shortest_path()
+        return max(0, len(path) - 1)
+
     def build_path(self, parents: dict, end: Node) -> list[Node]:
         """Remonte les parents depuis END pour reconstruire le chemin START -> END."""
         path = []
