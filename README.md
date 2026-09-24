@@ -95,7 +95,7 @@ Voir [docs/architecture.md](docs/architecture.md) et [docs/](docs/README.md).
 
 | Membre | Contribution |
 |---|---|
-| _à compléter_ | _à compléter_ |
+| Yusuf | _à compléter_ |
 | _à compléter_ | _à compléter_ |
 | _à compléter_ | _à compléter_ |
 
