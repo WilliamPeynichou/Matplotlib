@@ -9,6 +9,9 @@ class RoadNetwork:
     """Grille de columns x rows nodes, rangée dans une liste plate colonne par colonne."""
 
     def __init__(self, columns: int, rows: int):
+        if not isinstance(columns, int) or not isinstance(rows, int) or columns < 2 or rows < 1:
+            raise ValueError(f"grille invalide {columns}x{rows} : il faut columns >= 2 "
+                             "(START et END séparés) et rows >= 1")
         self.columns = columns
         self.rows = rows
         self.nodes = []

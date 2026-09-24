@@ -1,0 +1,10 @@
+[tool.ruff]
+line-length = 100
+exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B"]  # erreurs, style, imports, noms, bugs courants
+ignore = ["B905"]  # zip(path, path[1:]) : longueurs différentes voulues
+
+[tool.pytest.ini_options]
+testpaths = ["test_roadnetwork.py"]

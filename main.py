@@ -24,7 +24,11 @@ def create_seed() -> int:
 
 def main() -> None:
     """Lance RoadNetwork."""
-    network = RoadNetwork(COLUMNS, ROWS)
+    try:
+        network = RoadNetwork(COLUMNS, ROWS)
+    except ValueError as error:
+        print(f"Erreur : {error}. Corrige COLUMNS / ROWS dans main.py.")
+        return
     settings = {"roads": ROADS, "intersections": INTERSECTIONS, "vehicles": VEHICLES}
 
     def generate(seed: int, roads: int, intersections: int) -> int:

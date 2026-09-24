@@ -14,6 +14,7 @@ def generate_network(network: RoadNetwork, seed: int, roads: int = DEFAULT_ROADS
                      intersections: int | None = None) -> int:
     """Génère `roads` routes. Si `intersections` est donné, fait plusieurs essais
     et garde le réseau le plus proche. Renvoie le nombre d'intersections obtenu."""
+    roads = max(1, roads)  # au moins la route principale
     rng = random.Random(seed)
     best_state, best_score = None, None
     for _ in range(MAX_ATTEMPTS if intersections is not None else 1):

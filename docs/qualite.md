@@ -24,7 +24,13 @@ Le nombre d’intersections est une cible : afficher le nombre réel obtenu si l
 - Dans un round, un seul dev par fichier.
 - Un autre membre relit avant de merger.
 
+## Outils QA
+- `./run_checks.sh` = `ruff check .` + `pytest -q` + `python check.py`. Doit afficher `All checks passed!`, `68 passed`, `OK`.
+- Nouvelle règle dans le projet = nouveau test dans `test_roadnetwork.py` (nom en français qui dit la règle).
+- Bug trouvé = d'abord un test qui le reproduit, puis la correction (ex. grille 1 colonne qui plantait → `test_grille_invalide_message_clair`).
+
 ## Avant chaque merge
+- [ ] `./run_checks.sh` passe
 - [ ] `python main.py` se lance
 - [ ] 20 Randomize sans erreur
 - [ ] Je sais expliquer mon code à voix haute en 1 minute

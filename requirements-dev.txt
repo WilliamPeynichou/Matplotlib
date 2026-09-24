@@ -1,0 +1,3 @@
+# Outils qualité (tests + style)
+pytest
+ruff

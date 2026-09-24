@@ -3,7 +3,6 @@
 import time
 
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path
@@ -43,7 +42,7 @@ VEHICLE_COLORS = ["#8E44AD", "#E67E22", "#16A085", "#C0392B", "#2980B9", "#D3540
 VEHICLE_SIZE = 70
 CURVED_ROADS = True  # False = segments droits
 CURVE_STRENGTH = 0.5  # 0 = droit, 0.5 = courbe douce
-FRAME_INTERVAL = 30  # millisecondes entre deux images
+FRAME_INTERVAL = 50  # millisecondes entre deux images (20 fps : fluide, CPU raisonnable)
 SEGMENTS_PER_FRAME = 1  # vitesse de construction
 MAX_DT = 0.1  # secondes : évite un saut si la fenêtre a gelé
 FIGURE_SIZE = (10, 7)
@@ -170,7 +169,10 @@ class NetworkView:
         self.fig, self.ax = plt.subplots(figsize=FIGURE_SIZE)
         self.fig.canvas.manager.set_window_title("RoadNetwork")
         self.fig.subplots_adjust(right=0.8, bottom=0.28)
-        self.info = self.fig.text(0.5, 0.25, "", ha="center", color="#555555")
+        self.info = self.fig.text(0.5, 0.25, "", ha="center", color="#555555", animated=True)
+        self.vehicle_artist = None
+        self.background = None  # image du réseau sans véhicules (blitting)
+        self.fig.canvas.mpl_connect("draw_event", self.on_draw)
         self.create_controls()
         self.regenerate()
 
@@ -228,7 +230,7 @@ class NetworkView:
     def restart(self, build: bool) -> None:
         """Arrête l'animation en cours et en démarre une nouvelle."""
         if self.animation is not None:
-            self.animation.event_source.stop()
+            self.animation.stop()
         draw_grid(self.ax, self.network, self.get_title())
         self.built = 0
         if not build:
@@ -236,14 +238,28 @@ class NetworkView:
             self.built = len(self.network.segments)
         self.traffic = Traffic(self.network, self.settings["vehicles"], self.seed)
         colors = [VEHICLE_COLORS[i % len(VEHICLE_COLORS)] for i in range(self.settings["vehicles"])]
-        self.vehicle_artist = self.ax.scatter([], [], s=VEHICLE_SIZE, zorder=4,
+        self.vehicle_artist = self.ax.scatter([], [], s=VEHICLE_SIZE, zorder=4, animated=True,
                                               edgecolors="white", linewidths=1.5)
         self.vehicle_colors = colors
         self.last_time = time.perf_counter()
         self.info.set_text("")
-        self.animation = FuncAnimation(self.fig, self.update_frame, interval=FRAME_INTERVAL,
-                                       cache_frame_data=False)
+        self.background = None
+        # Minuteur simple au lieu de FuncAnimation : FuncAnimation redessine tout à chaque image.
+        self.animation = self.fig.canvas.new_timer(interval=FRAME_INTERVAL)
+        self.animation.add_callback(self.update_frame, 0)
+        self.animation.start()
         self.fig.canvas.draw_idle()
+
+    def on_draw(self, event) -> None:
+        """Après chaque dessin complet : mémorise le fond, puis pose véhicules et texte."""
+        self.background = self.fig.canvas.copy_from_bbox(self.fig.bbox)
+        self.draw_moving_parts()
+
+    def draw_moving_parts(self) -> None:
+        """Dessine seulement ce qui bouge (véhicules + compteur)."""
+        if self.vehicle_artist is not None:
+            self.ax.draw_artist(self.vehicle_artist)
+        self.fig.draw_artist(self.info)
 
     def update_frame(self, frame: int) -> None:
         """Une image : d'abord la construction, ensuite la circulation."""
@@ -255,8 +271,15 @@ class NetworkView:
                 if self.built < len(self.network.segments):
                     draw_step(self.ax, self.network, self.built)
                     self.built += 1
+            self.fig.canvas.draw_idle()  # construction : dessin complet
             return
         self.update_traffic(dt)
+        if self.background is None:
+            return
+        # Blitting : on recolle le fond et on redessine seulement les véhicules (CPU / 10).
+        self.fig.canvas.restore_region(self.background)
+        self.draw_moving_parts()
+        self.fig.canvas.blit(self.fig.bbox)
 
     def update_traffic(self, dt: float) -> None:
         """Avance les véhicules et met à jour leurs points et le compteur."""

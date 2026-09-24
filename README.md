@@ -44,13 +44,20 @@ Les intersections sont un nombre **visé** : si la combinaison taille de grille 
 
 Réglages avancés dans `display.py` : `SPEED`, `SPAWN_DELAY`, `DIVERGE_WINDOW` dans `traffic.py` ; `CURVED_ROADS`, `CURVE_STRENGTH`, `FRAME_INTERVAL` dans `display.py`.
 
-## Vérifications
+## Vérifications (QA)
 
 ```bash
-./.venv/bin/python check.py
+./.venv/bin/python -m pip install -r requirements-dev.txt   # une fois : pytest + ruff
+./run_checks.sh                                             # style + tests + check.py
 ```
 
-Teste les réseaux sur plusieurs tailles et seeds : départ/arrivée, liens, croisements, types, plus court chemin et règle de divergence des véhicules.
+| Outil | Ce qu'il vérifie |
+|---|---|
+| `ruff` | style, imports, noms, bugs courants (config dans `pyproject.toml`) |
+| `pytest` (`test_roadnetwork.py`, 68 tests) | une règle du projet = un test : START/END, toutes les routes vont au END, pas de croisement en X, types, doublons, même seed = même réseau, cas limites (grille 2×1, 0 et 10 routes), grille invalide = message clair, divergence des véhicules |
+| `check.py` | balayage de 120 réseaux (4 tailles × 30 seeds) |
+
+Grille invalide (`COLUMNS < 2` ou `ROWS < 1`) : le programme affiche un message clair au lieu de planter.
 
 ## Fonctionnalités
 
@@ -59,6 +66,8 @@ Teste les réseaux sur plusieurs tailles et seeds : départ/arrivée, liens, cro
 - Nombre d'intersections visé réglable ; génération cherche une solution proche.
 - Seed reproductible, Randomize.
 - Construction animée, routes courbes et légende.
+- Toutes les routes rejoignent le END (aucun cul-de-sac).
+- Animation optimisée (blitting : seuls les véhicules sont redessinés).
 - Plus court chemin START → END (BFS), surligné en bleu.
 - Nombre réglable de véhicules, départs espacés.
 - Règle de divergence : à une intersection, éviter la sortie choisie par un autre véhicule dans les 2 dernières secondes, si une autre sortie est disponible.
@@ -75,7 +84,9 @@ Teste les réseaux sur plusieurs tailles et seeds : départ/arrivée, liens, cro
 | `traffic.py` | véhicules, mouvement, décisions de sortie |
 | `display.py` | fenêtre, curseurs, dessin et animation |
 | `main.py` | point d'entrée et réglages par défaut |
-| `check.py` | vérifications automatiques |
+| `check.py` | vérifications automatiques (balayage) |
+| `test_roadnetwork.py` | tests pytest, une règle = un test |
+| `run_checks.sh` | QA en une commande |
 
 Voir [docs/architecture.md](docs/architecture.md) et [docs/](docs/README.md).
 

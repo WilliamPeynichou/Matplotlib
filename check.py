@@ -3,7 +3,7 @@
 from generator import generate_network
 from models import NodeType
 from network import RoadNetwork
-from traffic import DIVERGE_WINDOW, Traffic
+from traffic import Traffic
 
 SEEDS = 30
 SIZES = [(15, 9), (3, 3), (2, 1), (30, 20)]
@@ -79,7 +79,7 @@ def check_divergence() -> list[str]:
     errors = []
     if not traffic.decisions:
         errors.append("aucune décision de route testée")
-    for node, moment, choice, exits, recent in traffic.decisions:
+    for node, _moment, choice, exits, recent in traffic.decisions:
         if len(exits) > 1 and recent and choice is recent[-1]:
             errors.append(f"les véhicules ne divergent pas à {node}")
             break
