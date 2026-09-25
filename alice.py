@@ -33,6 +33,7 @@ CURVE_IMAGE = ROOT / "docs" / "images" / "alice_apprentissage.png"
 RL_EPISODES = 3000
 FUEL_COST = 0.15  # récompense perdue par unité de carburant (le « prix du litre »)
 MIN_EPSILON = 0.05
+LIVE_LAPS = 40  # mode direct : tours pour passer d'epsilon 1 (hasard) à MIN_EPSILON
 TEST_SEEDS = range(30)  # circuits de test, jamais vus à l'entraînement (seeds < FIRST_SEED)
 
 
@@ -56,6 +57,19 @@ class AliceAgent(QAgent):
             length = traffic.network.get_length(node, target)
             self.memory[vehicle][3] -= FUEL_COST * FUEL[pace] * length
         return target, pace
+
+
+class LiveAlice(AliceAgent):
+    """Alice qui apprend EN DIRECT, tour après tour, en partant de zéro (table vide).
+    Tour 0 : epsilon = 1 (tout au hasard). Puis epsilon baisse à chaque tour terminé
+    jusqu'à MIN_EPSILON au tour LIVE_LAPS. La table grandit pendant qu'on regarde."""
+
+    def __init__(self, seed: int = 0):
+        super().__init__(learning=True, epsilon=1.0, seed=seed)
+
+    def choose(self, traffic, vehicle, node, exits):
+        self.epsilon = max(MIN_EPSILON, 1 - vehicle.laps / LIVE_LAPS)
+        return super().choose(traffic, vehicle, node, exits)
 
 
 def train_alice(episodes: int = RL_EPISODES, seed: int = 1) -> QAgent:

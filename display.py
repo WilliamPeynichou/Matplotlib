@@ -49,7 +49,8 @@ CRASH_DURATION = 0.6  # secondes : la croix de collision s'efface pendant ce tem
 CURVED_ROADS = True  # False = segments droits
 JITTER = 0.3  # décalage max à l'écran ; < 0.5 garde l'ordre des nodes (aucun croisement)
 layout = {"seed": 0, "circuit": None}  # seed du décalage ; circuit affiché (ou None)
-ALICE_LABELS = {"tree": "arbre de décision (supervisé)", "rl": "Q-learning (renforcement)"}
+ALICE_LABELS = {"tree": "arbre de décision (supervisé)", "rl": "Q-learning (renforcement)",
+                "live": "Q-learning EN DIRECT (apprend tour après tour)"}
 PACE_LABELS = {"slow": "lent", "normal": "normal", "fast": "rapide"}
 CURVE_SAMPLES = 12  # points par route dessinée
 CURVE_STRENGTH = 0.5  # 0 = droit, 0.5 = courbe douce
@@ -207,6 +208,9 @@ def make_alice_policy(alice: str | None):
     if alice == "tree":
         from tree_model import make_tree_policy
         return make_tree_policy()
+    if alice == "live":
+        from alice import LiveAlice
+        return LiveAlice()
     if alice == "rl":
         from alice import make_alice_policies
         return make_alice_policies()["RL"]()
@@ -223,6 +227,21 @@ def get_alice_lines(alice) -> list[str]:
             f"  distance : {alice.distance:.1f}  ·  carburant : {alice.fuel:.1f}"]
 
 
+def get_lap_lines(alice, policy) -> list[str]:
+    """Progression tour après tour : collisions des derniers tours, début vs fin."""
+    laps = alice.lap_collisions
+    lines = []
+    if hasattr(policy, "epsilon") and getattr(policy, "learning", False):
+        lines.append(f"  hasard (epsilon) : {policy.epsilon:.0%}  ·  états appris : {len(policy.q)}")
+    if laps:
+        lines.append("  coll. par tour : " + " ".join(map(str, laps[-12:])))
+    if len(laps) >= 10:
+        first, last = laps[:5], laps[-5:]
+        lines.append(f"  5 premiers tours : {sum(first) / 5:.1f}  ->  5 derniers : "
+                     f"{sum(last) / 5:.1f}")
+    return lines
+
+
 def get_ranking_text(traffic: Traffic, alice: str | None = None) -> str:
     """Classement : rang, prénom, tours, meilleur tour, collisions. Alice (ML) marquée."""
     lines = ["#  Prénom    Tours  Meilleur  Coll."]
@@ -236,6 +255,7 @@ def get_ranking_text(traffic: Traffic, alice: str | None = None) -> str:
     if alice:
         lines.append(f"\n* Alice conduit avec : {ALICE_LABELS[alice]}")
         lines.extend(get_alice_lines(traffic.vehicles[0]))
+        lines.extend(get_lap_lines(traffic.vehicles[0], traffic.policy_of(traffic.vehicles[0])))
     return "\n".join(lines)
 
 
@@ -410,7 +430,8 @@ class NetworkView:
 
     def update_traffic(self, dt: float) -> None:
         """Avance les véhicules et met à jour leurs points, les collisions et le compteur."""
-        self.traffic.update(dt)
+        for _ in range(self.settings.get("speedup", 1)):  # accéléré : plusieurs pas par image
+            self.traffic.update(dt)
         positions = get_vehicle_positions(self.traffic)
         moving = self.traffic.get_moving()
         self.vehicle_artist.set_offsets(positions if positions else [[float("nan")] * 2])

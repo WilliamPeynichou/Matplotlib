@@ -18,7 +18,8 @@ MAX_SEED = 99999
 ROADS = 4  # chemin principal + branches
 INTERSECTIONS = 4  # nombre visé (le plus proche possible)
 VEHICLES = 6
-ALICE = "rl"  # Alice seule : "tree" (arbre), "rl" (Q-learning), None (comme les autres)
+ALICE = "live"  # Alice : "live" (apprend en direct), "rl" (table apprise), "tree", None
+SPEEDUP = 10  # 1 = temps réel ; 10 = 10x plus vite (pour voir Alice apprendre)
 DRIVING = "rule"  # conduite au démarrage : "random", "rule" ou "learned" (lancer train.py avant)
 
 
@@ -42,7 +43,8 @@ def main() -> None:
               "Conduite Règle utilisée.")
         driving = "rule"
     settings = {"roads": ROADS, "intersections": INTERSECTIONS, "vehicles": VEHICLES,
-                "driving": driving, "alice": ALICE}
+                "driving": driving, "alice": ALICE,
+                "speedup": SPEEDUP}
 
     def generate(seed: int, roads: int, intersections: int) -> int:
         """Génère le réseau et renvoie le nombre d'intersections obtenu."""

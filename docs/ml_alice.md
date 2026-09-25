@@ -226,3 +226,25 @@ Mêmes 30 circuits (seeds 0-29), jamais utilisés pour apprendre (entraînement 
 - *Pourquoi le RL gère mieux le carburant que l'arbre ?* → il apprend le compromis dans sa récompense ; l'arbre a un poids réglé à la main (§8).
 - *Pourquoi ajouter la longueur dans l'état ?* → si le temps dépend de la longueur, Alice doit la voir pour décider (observabilité).
 - *Surapprentissage ?* → précision entraînement ≈ test, profondeur limitée à 4.
+
+## 11. Alice apprend EN DIRECT, tour après tour (`ALICE = "live"`)
+
+Dans `main.py` : `ALICE = "live"` et `SPEEDUP = 10` (la simulation va 10× plus vite pour voir la progression).
+
+- Alice part d'une **table vide** : elle ne sait rien (`LiveAlice`, dans `alice.py`).
+- Elle apprend **pendant qu'on regarde** : chaque décision met à jour sa table Q.
+- **Exploration** : au tour 0, epsilon = 100 % (tout au hasard). Il baisse à chaque tour terminé, jusqu'à 5 % au tour `LIVE_LAPS` (40).
+- **À l'écran**, sous le classement :
+  - epsilon et nombre d'états appris ;
+  - collisions de chacun des derniers tours ;
+  - moyenne des 5 premiers tours comparée à celle des 5 derniers.
+- **Le code** : chaque voiture garde `lap_collisions`, ses collisions tour par tour (`traffic.py`, `finish_lap`).
+
+Mesure sans fenêtre (120 tours, moyenne de collisions par tour, par blocs de 20 tours) :
+
+| Circuit | tours 1-20 | 21-40 | 41-60 | 61-80 | 81-100 | 101-120 |
+|---|---:|---:|---:|---:|---:|---:|
+| seed 3 | 1,65 | 0,70 | 0,15 | 0,30 | 0,25 | **0,00** |
+| seed 2 | 1,95 | 0,95 | 1,20 | 0,90 | 1,10 | 0,85 |
+
+⚠️ **C'est bruité** : on a une seule voiture et peu de tours, alors il y a de bons et de mauvais tours. Il faut regarder la **tendance** (les 5 premiers tours comparés aux 5 derniers), pas un tour isolé. L'entraînement complet (`alice.py`, environ 4500 tours) donne une courbe plus propre : voir `alice_apprentissage.png`.

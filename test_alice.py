@@ -133,3 +133,27 @@ def test_alice_rl_paie_le_carburant():
     alice = traffic.vehicles[ALICE]
     reward = agent.memory[alice][3]
     assert reward < 0 and reward == pytest.approx(-FUEL_COST * alice.fuel)
+
+
+def test_collisions_comptees_par_tour():
+    circuit = Circuit(10, 5)
+    circuit.generate(1, 3, 6)
+    traffic = Traffic(circuit, 4, seed=1)
+    while traffic.vehicles[0].laps < 3:
+        traffic.update(0.1)
+    for vehicle in traffic.vehicles:
+        assert len(vehicle.lap_collisions) == vehicle.laps
+        assert sum(vehicle.lap_collisions) <= vehicle.collisions
+
+
+def test_alice_en_direct_apprend_tour_apres_tour():
+    from alice import MIN_EPSILON, LiveAlice
+    circuit = Circuit(10, 5)
+    circuit.generate(1, 3, 6)
+    alice = LiveAlice()
+    traffic = Traffic(circuit, 3, seed=1, special={ALICE: alice})
+    assert not alice.q  # part de zéro
+    while traffic.vehicles[ALICE].laps < 2:
+        traffic.update(0.1)
+    assert alice.q and alice.learning  # la table grandit en roulant
+    assert MIN_EPSILON <= alice.epsilon < 1  # moins de hasard après chaque tour

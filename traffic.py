@@ -42,6 +42,8 @@ class Vehicle:
         self.best_lap = None  # meilleur temps de tour (secondes)
         self.lap_start = departure
         self.collisions = 0
+        self.lap_collisions = []  # collisions de chaque tour terminé (voir si Alice progresse)
+        self.collisions_at_lap_start = 0
         # False (tout le monde) : chaque tronçon dure pareil. True (Alice) : plus un tronçon
         # est long, plus il prend de temps (vitesse de base / longueur).
         self.distance_aware = False
@@ -208,6 +210,8 @@ class Traffic:
         if vehicle.best_lap is None or lap < vehicle.best_lap:
             vehicle.best_lap = lap
         vehicle.lap_start = self.time
+        vehicle.lap_collisions.append(vehicle.collisions - vehicle.collisions_at_lap_start)
+        vehicle.collisions_at_lap_start = vehicle.collisions
 
     def get_ranking(self) -> list[Vehicle]:
         """Classement : plus de tours d'abord, puis meilleur tour le plus court."""
