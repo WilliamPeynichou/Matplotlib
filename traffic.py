@@ -20,6 +20,8 @@ MIN_SPEED_FACTOR = 0.7  # le plus lent roule à 0.7 x SPEED
 MAX_SPEED_FACTOR = 1.3  # le plus rapide à 1.3 x SPEED
 SPAWN_DELAY = 0.7  # secondes entre deux départs
 MIN_GAP = 0.15  # en segments : plus près que ça, deux véhicules se heurtent
+# Carburant (Alice) : consommation par unité de longueur selon l'allure. Rouler vite coûte.
+FUEL = {"slow": 0.5, "normal": 1.0, "fast": 2.0}
 NAMES = ["Alice", "Bruno", "Chloé", "David", "Emma", "Farid", "Gaïa", "Hugo", "Inès", "Jules",
          "Karim", "Léa", "Malik", "Nina", "Oscar", "Paul", "Rose", "Sami", "Théo", "Zoé"]
 
@@ -47,6 +49,7 @@ class Vehicle:
         self.length = 1.0  # longueur du tronçon en cours
         self.pace_counts = {pace: 0 for pace in PACES}  # combien de fois chaque allure
         self.distance = 0.0  # distance parcourue (vraies longueurs si distance_aware)
+        self.fuel = 0.0  # carburant consommé (seulement si distance_aware)
         self.current = start  # dernier node atteint
         self.target = None  # node vers lequel il roule (None = à l'arrêt)
         self.progress = 0.0  # 0 = sur current, 1 = sur target
@@ -182,6 +185,8 @@ class Traffic:
         vehicle.length = self.get_length(vehicle) if vehicle.distance_aware else 1.0
         vehicle.pace_counts[pace] += 1
         vehicle.distance += vehicle.length
+        if vehicle.distance_aware:
+            vehicle.fuel += FUEL[pace] * vehicle.length
 
     def get_length(self, vehicle: Vehicle) -> float:
         """Longueur du tronçon en cours du véhicule (mise en cache)."""

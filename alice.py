@@ -22,6 +22,7 @@ from pathlib import Path
 
 from learning import STATE_SIZE, QAgent, get_length_classes, get_state
 from policies import RandomPolicy, RulePolicy
+from traffic import FUEL
 from tree_model import EPISODE_TIME, FIRST_SEED, make_tree_policy, run_circuit
 
 ROOT = Path(__file__).parent
@@ -29,6 +30,7 @@ ALICE = 0  # numéro de la voiture étudiée (0 = Alice)
 Q_ALICE_FILE = ROOT / "q_alice.json"
 RESULT_IMAGE = ROOT / "docs" / "images" / "alice.png"
 RL_EPISODES = 3000
+FUEL_COST = 0.15  # récompense perdue par unité de carburant (le « prix du litre »)
 MIN_EPSILON = 0.05
 TEST_SEEDS = range(30)  # circuits de test, jamais vus à l'entraînement (seeds < FIRST_SEED)
 
@@ -44,6 +46,15 @@ class AliceAgent(QAgent):
         """État habituel + classe de longueur de chaque sortie."""
         return (*get_state(traffic, vehicle, node, exits),
                 *get_length_classes(traffic, node, exits))
+
+    def choose(self, traffic, vehicle, node, exits):
+        """Comme QAgent, puis on facture le carburant du tronçon choisi :
+        récompense -= FUEL_COST x consommation(allure) x longueur. Rapide = 2x plus cher."""
+        target, pace = super().choose(traffic, vehicle, node, exits)
+        if self.learning and vehicle in self.memory:
+            length = traffic.network.get_length(node, target)
+            self.memory[vehicle][3] -= FUEL_COST * FUEL[pace] * length
+        return target, pace
 
 
 def train_alice(episodes: int = RL_EPISODES, seed: int = 1) -> QAgent:
@@ -76,13 +87,14 @@ def make_alice_policies(q_path: Path = Q_ALICE_FILE) -> dict:
 def measure(make_policy, seeds=TEST_SEEDS) -> dict:
     """Moyennes sur les circuits de test : collisions/min d'Alice, ses tours, et les
     collisions/min des autres (pour voir si Alice les gêne)."""
-    alice_collisions = alice_laps = others = 0.0
+    alice_collisions = alice_laps = others = fuel = 0.0
     paces = {"slow": 0, "normal": 0, "fast": 0}
     for seed in seeds:
         traffic = run_circuit(seed, RulePolicy(), special={ALICE: make_policy()})
         alice = traffic.vehicles[ALICE]
         alice_collisions += alice.collisions
         alice_laps += alice.laps
+        fuel += alice.fuel / max(alice.distance, 1e-9)  # carburant par unité de distance
         for pace, count in alice.pace_counts.items():
             paces[pace] += count
         rest = traffic.vehicles[:ALICE] + traffic.vehicles[ALICE + 1:]
@@ -90,7 +102,7 @@ def measure(make_policy, seeds=TEST_SEEDS) -> dict:
     minutes = len(seeds) * EPISODE_TIME / 60
     choices = sum(paces.values()) or 1
     return {"alice": alice_collisions / minutes, "tours": alice_laps / len(seeds),
-            "autres": others / minutes,
+            "autres": others / minutes, "carburant": fuel / len(seeds),
             "allures": {pace: count / choices for pace, count in paces.items()}}
 
 
@@ -99,15 +111,17 @@ def draw(results: dict, path: Path = RESULT_IMAGE) -> None:
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
 
-    figure = Figure(figsize=(10, 4))
+    figure = Figure(figsize=(14, 4))
     FigureCanvasAgg(figure)
-    left, right = figure.subplots(1, 2)
+    left, right, fuel = figure.subplots(1, 3)
     names = list(results)
     colors = ["#b5b4ae", "#8a8984", "#2e9e6a", "#2a78d6"]
     left.bar(names, [results[n]["alice"] for n in names], color=colors)
     left.set_title("Collisions d'Alice par minute (plus bas = mieux)")
     right.bar(names, [results[n]["tours"] for n in names], color=colors)
     right.set_title("Tours d'Alice par épisode de 60 s (plus haut = mieux)")
+    fuel.bar(names, [results[n]["carburant"] for n in names], color=colors)
+    fuel.set_title("Carburant d'Alice par unité de distance (plus bas = mieux)")
     figure.tight_layout()
     figure.savefig(path, dpi=90)
 
@@ -120,11 +134,11 @@ def main() -> None:
     print(f"2. Comparaison sur {len(TEST_SEEDS)} circuits jamais vus…")
     results = {name: measure(make) for name, make in make_alice_policies().items()}
     print(f"   {'Conduite':<8} {'Alice coll/min':>15} {'Alice tours':>12} {'autres coll/min':>16}"
-          f"   allures d'Alice (lent / normal / rapide)")
+          f" {'carburant/dist':>15}   allures d'Alice (lent / normal / rapide)")
     for name, r in results.items():
         slow, normal, fast = (r["allures"][p] for p in ("slow", "normal", "fast"))
         print(f"   {name:<8} {r['alice']:>15.2f} {r['tours']:>12.2f} {r['autres']:>16.2f}"
-              f"   {slow:>5.0%} / {normal:>4.0%} / {fast:>4.0%}")
+              f" {r['carburant']:>15.2f}   {slow:>5.0%} / {normal:>4.0%} / {fast:>4.0%}")
     draw(results)
     print(f"3. Graphique -> {RESULT_IMAGE.relative_to(ROOT)}")
 

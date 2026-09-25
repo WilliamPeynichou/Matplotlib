@@ -106,3 +106,28 @@ def test_les_autres_gardent_les_memes_regles():
     for _ in range(100):
         traffic.update(0.1)
     assert all(not v.distance_aware and v.length == 1.0 for v in traffic.vehicles)
+
+
+def test_carburant_rapide_coute_plus_et_seulement_pour_alice():
+    from traffic import FUEL
+    assert FUEL["fast"] > FUEL["normal"] > FUEL["slow"]
+    circuit = Circuit(10, 5)
+    circuit.generate(1, 3, 6)
+    traffic = Traffic(circuit, 3, seed=1, special={ALICE: RulePolicy()})
+    for _ in range(200):
+        traffic.update(0.1)
+    alice, *others = traffic.vehicles
+    assert alice.fuel == pytest.approx(alice.distance)  # Règle = allure normale = 1 par unité
+    assert all(v.fuel == 0 for v in others)
+
+
+def test_alice_rl_paie_le_carburant():
+    from alice import FUEL_COST, AliceAgent
+    circuit = Circuit(10, 5)
+    circuit.generate(1, 3, 6)
+    agent = AliceAgent(learning=True, epsilon=1.0)
+    traffic = Traffic(circuit, 1, seed=1, special={ALICE: agent})
+    traffic.update(0.01)  # Alice part et choisit son premier tronçon
+    alice = traffic.vehicles[ALICE]
+    reward = agent.memory[alice][3]
+    assert reward < 0 and reward == pytest.approx(-FUEL_COST * alice.fuel)

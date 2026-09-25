@@ -25,7 +25,7 @@ from pathlib import Path
 from circuit import Circuit
 from learning import ACTIONS, NO_EXIT, get_length_classes, get_state
 from policies import PACES, Policy, RandomPolicy, RulePolicy
-from traffic import Traffic
+from traffic import FUEL, Traffic
 
 ROOT = Path(__file__).parent
 DATA_FILE = ROOT / "data" / "decisions.csv"
@@ -51,6 +51,7 @@ FIRST_SEED = 10_000  # seeds 0..9999 réservées à la comparaison (données jam
 MAX_DEPTH = 4  # profondeur de l'arbre : petit = lisible et moins de surapprentissage
 TEST_SHARE = 0.2  # 20 % des exemples servent seulement à tester
 SLOW_PENALTY = 0.03  # petit malus pour les allures lentes (sinon « lent partout » gagne)
+FUEL_WEIGHT = 0.007  # poids du carburant (réglé : 0.005 = toujours rapide, 0.01 = jamais)
 
 
 # ---------------------------------------------------------------- 1. COLLECTER
@@ -195,8 +196,10 @@ class TreePolicy(Policy):
         rows = [[*state, direction, PACE_NAMES.index(pace)] for direction, pace in actions]
         risks = self.get_risks(rows)
         self.last_risks[vehicle] = dict(zip(actions, risks, strict=True))
+        lengths = {e.y - node.y + 1: traffic.network.get_length(node, e) for e in exits}
         scores = [risk + SLOW_PENALTY * (1 / PACES[pace] - 1)
-                  for risk, (_, pace) in zip(risks, actions, strict=True)]
+                  + FUEL_WEIGHT * FUEL[pace] * lengths[direction]
+                  for risk, (direction, pace) in zip(risks, actions, strict=True)]
         direction, pace = actions[scores.index(min(scores))]
         target = next(e for e in exits if e.y - node.y + 1 == direction)
         return target, pace

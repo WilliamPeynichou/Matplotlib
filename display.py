@@ -220,7 +220,7 @@ def get_alice_lines(alice) -> list[str]:
     return [f"  allure : {PACE_LABELS[alice.pace]}  ·  tronçon : {alice.length:.2f}",
             "  allures choisies : " + " / ".join(f"{PACE_LABELS[p]} {counts[p] / total:.0%}"
                                                   for p in counts),
-            f"  distance : {alice.distance:.1f}  (les longs tronçons prennent plus de temps)"]
+            f"  distance : {alice.distance:.1f}  ·  carburant : {alice.fuel:.1f}"]
 
 
 def get_ranking_text(traffic: Traffic, alice: str | None = None) -> str:

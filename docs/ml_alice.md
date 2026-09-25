@@ -142,51 +142,72 @@ q = q + 0.1 × (récompense + 0.9 × meilleur q de la situation suivante − q)
 - À l'écran : sous le classement, l'allure actuelle d'Alice, la longueur du tronçon et la répartition lent / normal / rapide.
 - Dans le terminal : `alice.py` affiche la répartition des allures pour chaque conduite.
 
-## 7. La comparaison (30 circuits jamais vus)
+## 7. Le carburant : rouler vite doit coûter quelque chose
+
+**Problème observé** (grâce au compteur d'allures) : Alice roulait à 90-100 % en « rapide ». Rien ne l'en empêchait.
+
+**Correction** : un carburant, **pour Alice seulement**.
+- Consommation d'un tronçon = `FUEL[allure] × longueur`, avec `FUEL = lent 0,5 · normal 1 · rapide 2` (`traffic.py`). Donc rapide = 2× plus cher, et un tronçon long coûte plus.
+- **RL** (`AliceAgent.choose`) : la récompense perd `FUEL_COST (0,15) × consommation`. Alice doit maintenant comparer trois choses : le temps (−0,1/s), le carburant et les collisions (−10).
+- **Arbre** (`TreePolicy`) : score = risque + malus lenteur + `FUEL_WEIGHT (0,007) × consommation`.
+- À l'écran : carburant d'Alice sous le classement. Dans le terminal : carburant par unité de distance.
+
+## 8. La comparaison (30 circuits jamais vus)
 
 ![Comparaison](images/alice.png)
 
-| Conduite d'Alice | Collisions d'Alice / min | Tours / 60 s | Collisions des autres / min | Allures lent / normal / rapide |
+| Conduite d'Alice | Collisions / min | Tours / 60 s | Carburant / distance | Allures lent / normal / rapide |
 |---|---:|---:|---:|---|
-| Hasard | 9,23 | 1,03 | 3,47 | 31 % / 34 % / 35 % |
-| Règle | 6,57 | 1,20 | 3,14 | 0 % / 100 % / 0 % |
-| Arbre (supervisé) | **2,53** | **2,27** | **2,73** | 0 % / 0 % / 100 % |
-| RL (Q-learning, 3000 épisodes) | 2,77 | 1,97 | 2,76 | 2 % / 7 % / 91 % |
+| Hasard | 9,23 | 1,03 | 1,19 | 31 % / 34 % / 35 % |
+| Règle | 6,57 | 1,20 | 1,00 | 0 % / 100 % / 0 % |
+| Arbre (supervisé) | 7,87 | 1,70 | 1,58 | 0 % / 35 % / 65 % |
+| RL (Q-learning, 3000 épisodes) | **4,07** | **1,97** | 1,72 | 2 % / 25 % / 73 % |
+
+Avant le carburant, pour comparer : Arbre 2,53 collisions/min à 100 % rapide ; RL 2,77 à 91 % rapide.
 
 ### Lecture
-- **Le ML marche** : Arbre et RL ont environ 3× moins de collisions que la Règle et 3,5× moins que le Hasard.
-- **Pourquoi la Règle fait moins bien qu'avant (6,57 au lieu de 2,13)** : Alice ralentit maintenant sur les longs tronçons, pas les autres. Avec la Règle, elle roule à allure normale et se fait **rattraper par derrière**. Les modèles l'ont compris : rouler vite = ne pas se faire percuter.
-- **« Rapide » reste le choix principal, et c'est logique.** Dans ce monde, rouler vite ne coûte rien : pas de carburant, pas de risque de sortie de route. Et rester lente fait rattraper Alice. Le RL, lui, varie un peu (9 % lent ou normal) selon la situation.
-- **L'observabilité a servi** : sans le compteur d'allures, on n'aurait pas vu que l'arbre roule à 100 % en rapide.
+- **Alice module sa vitesse** : le RL passe de 7 % à 25 % en allure normale. Le carburant a changé son comportement.
+- **Le RL reste le meilleur** : le moins de collisions, le plus de tours. Il fait un **compromis**, parce qu'il additionne temps, carburant et collisions dans une seule récompense.
+- **Le prix du compromis** : un peu plus de collisions qu'avant le carburant (2,77 → 4,07). Moins vite = plus souvent rattrapée par derrière. C'est un vrai choix, pas un bug.
+- **L'arbre gère mal le compromis.** Selon `FUEL_WEIGHT`, il passe d'un extrême à l'autre :
+
+| `FUEL_WEIGHT` | 0,005 | 0,006 | **0,007** | 0,008 | 0,01 |
+|---|---|---|---|---|---|
+| Allure rapide | 100 % | 95 % | **65 %** | 40 % | 3 % |
+| Collisions / min | 3,80 | 4,13 | **7,87** | 9,23 | 7,43 |
+
+Pourquoi ? L'arbre ne prédit qu'un **risque**, et ce risque change peu d'une allure à l'autre. Le carburant est ajouté **à la main** après coup, et le poids est choisi par un humain. Le RL, lui, **apprend** combien vaut le carburant face aux collisions.
 
 ### ⚠️ Piège n°2 : un modèle optimise ce qu'on lui demande, pas ce qu'on imagine
-Si « rapide » gagne toujours, ce n'est pas un bug du modèle, c'est la règle du jeu. Pour qu'Alice module sa vitesse, il faut que **rouler vite coûte quelque chose**. Pistes (exercices) :
-- malus de vitesse dans la récompense (ex. −0,05 par tronçon en rapide = carburant) ;
-- rapide plus dangereux : distance de contact (`MIN_GAP`) plus grande quand on roule vite ;
-- limitation de vitesse sur les tronçons longs ou courbes.
+Sans carburant, « rapide partout » était la bonne réponse, pas un bug. Pour changer un comportement, on change **les règles du jeu** (la récompense), pas le modèle. Autres pistes : rapide plus dangereux (`MIN_GAP` plus grand), limitation de vitesse sur les tronçons longs.
 
 ### ⚠️ Piège n°3 : toujours comparer à conditions égales
-Mêmes 30 circuits (seeds 0-29), jamais utilisés pour apprendre (entraînement sur seeds ≥ 10 000), même trafic autour d'Alice, et Alice roule aux vraies distances **dans toutes les conduites**. Sinon la différence pourrait venir du hasard, pas du modèle.
+Mêmes 30 circuits (seeds 0-29), jamais utilisés pour apprendre (entraînement sur seeds ≥ 10 000), même trafic autour d'Alice. Dans toutes les conduites, Alice roule aux vraies distances et consomme du carburant.
 
-### Pourquoi l'arbre ne voit que l'instant présent
-Il prédit « collision sur CE tronçon ? ». Le RL, avec GAMMA, compte aussi la suite. Ici l'arbre gagne de peu, parce que « rouler vite » est une bonne réponse à court terme comme à long terme.
+### Supervisé ou renforcement : la leçon
+| | Arbre | RL |
+|---|---|---|
+| Question apprise | « risque de collision maintenant ? » | « combien rapporte cette action, au total ? » |
+| Objectifs multiples (temps, carburant, sécurité) | ajoutés à la main, poids à régler | appris ensemble, dans la récompense |
+| Résultat ici | instable selon le poids | compromis stable |
 
-## 8. Qui fait quoi dans le code
+## 9. Qui fait quoi dans le code
 
 | Fichier | Rôle |
 |---|---|
-| `traffic.py` | `Traffic(..., special={0: conduite})` : Alice a sa conduite (`policy_of`) et roule aux vraies distances (`distance_aware`, `get_length`). Compte les allures (`pace_counts`) |
+| `traffic.py` | `Traffic(..., special={0: conduite})` : Alice a sa conduite (`policy_of`) et roule aux vraies distances (`distance_aware`, `get_length`). Compte les allures (`pace_counts`) et le carburant (`FUEL`, `fuel`) |
 | `circuit.py` / `network.py` | `get_length(a, b)` : longueur réelle d'un tronçon |
 | `learning.py` | `get_state` (features), `QAgent` (RL), inchangés |
 | `tree_model.py` | collecte (`RecorderPolicy`), entraînement (`train`), conduite (`TreePolicy`) |
-| `alice.py` | `AliceAgent` (voit les longueurs), RL d'Alice (`train_alice`), comparaison (`measure`), graphique |
+| `alice.py` | `AliceAgent` (voit les longueurs, paie le carburant), RL d'Alice (`train_alice`), comparaison (`measure`), graphique |
 | `display.py` / `main.py` | `ALICE = "rl"/"tree"/None`, Alice en contour noir, `Alice*` dans le classement |
 | `test_alice.py` | 8 tests : conduite spéciale, exemples bien formés, arbre > hasard, RL apprend, mesure reproductible |
 
-## 9. Questions d'oral probables
+## 10. Questions d'oral probables
 - *Différence supervisé / renforcement ?* → corrigés vs essais-récompenses (tableau §2).
-- *Pourquoi une seule voiture ?* → pour isoler l'effet de la conduite (§7, piège 3).
+- *Pourquoi une seule voiture ?* → pour isoler l'effet de la conduite (§8, piège 3).
 - *Pourquoi l'arbre a 73,5 % et le modèle bête 82 % ?* → classe rare, regarder le rappel (§4, piège 1).
-- *Pourquoi Alice roule surtout vite ?* → rouler vite ne coûte rien et évite de se faire rattraper. Le modèle optimise la règle du jeu (§7, piège 2).
+- *Pourquoi Alice roulait toujours vite ?* → rien ne l'en empêchait. On a ajouté le carburant : elle module (§7-8, piège 2).
+- *Pourquoi le RL gère mieux le carburant que l'arbre ?* → il apprend le compromis dans sa récompense ; l'arbre a un poids réglé à la main (§8).
 - *Pourquoi ajouter la longueur dans l'état ?* → si le temps dépend de la longueur, Alice doit la voir pour décider (observabilité).
 - *Surapprentissage ?* → précision entraînement ≈ test, profondeur limitée à 4.
