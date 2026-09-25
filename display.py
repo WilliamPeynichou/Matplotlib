@@ -232,7 +232,8 @@ def get_lap_lines(alice, policy) -> list[str]:
     laps = alice.lap_collisions
     lines = []
     if hasattr(policy, "epsilon") and getattr(policy, "learning", False):
-        lines.append(f"  hasard (epsilon) : {policy.epsilon:.0%}  ·  états appris : {len(policy.q)}")
+        lines.append(f"  hasard (epsilon) : {policy.epsilon:.0%}  ·  "
+                     f"états appris : {len(policy.q)}")
     if laps:
         lines.append("  coll. par tour : " + " ".join(map(str, laps[-12:])))
     if len(laps) >= 10:
