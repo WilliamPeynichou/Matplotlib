@@ -69,7 +69,7 @@ descendre,tout_droit,monter,rapide,derriere,direction,allure,collision
 - si une collision arrive avant la décision suivante : label → 1 ;
 - à la décision suivante : la ligne est rangée.
 
-150 circuits × 60 s → **~97 000 décisions**, dont **~14 % de collisions**.
+150 circuits × 60 s → **~97 000 décisions**, dont **~18 % de collisions**.
 
 ### Étape 2 : entraîner
 ```python
@@ -95,13 +95,13 @@ Pour chaque action possible (≤ 9), l'arbre donne une **probabilité de collisi
 ### Les résultats (lancer `tree_model.py` pour les voir)
 | Mesure | Valeur | Lecture |
 |---|---|---|
-| Précision modèle « bête » (répond toujours « pas de collision ») | 85,5 % | le piège ! |
-| Précision de l'arbre | 75,5 % | plus bas… |
-| Collisions détectées (rappel) | 76,5 % | …mais il repère 3 collisions sur 4, le « bête » 0 |
-| Précision sur l'entraînement | 75,8 % | ≈ test → **pas de surapprentissage** |
+| Précision modèle « bête » (répond toujours « pas de collision ») | 82,2 % | le piège ! |
+| Précision de l'arbre | 73,5 % | plus bas… |
+| Collisions détectées (rappel) | 78,1 % | …mais il repère 3 collisions sur 4, le « bête » 0 |
+| Précision sur l'entraînement | 73,8 % | ≈ test → **pas de surapprentissage** |
 
 ### ⚠️ Piège n°1 : la précision ment quand une classe est rare
-86 % des décisions sont sans collision. Un modèle qui dit toujours « pas de collision » a 86 % de précision… et ne sert à rien. C'est pour ça qu'on regarde le **rappel** (part des collisions détectées) et qu'on met `class_weight="balanced"` (une erreur sur une collision coûte plus cher).
+82 % des décisions sont sans collision. Un modèle qui dit toujours « pas de collision » a 82 % de précision… et ne sert à rien. C'est pour ça qu'on regarde le **rappel** (part des collisions détectées) et qu'on met `class_weight="balanced"` (une erreur sur une collision coûte plus cher).
 
 ---
 
@@ -186,7 +186,7 @@ Il prédit « collision sur CE tronçon ? ». Le RL, avec GAMMA, compte aussi la
 ## 9. Questions d'oral probables
 - *Différence supervisé / renforcement ?* → corrigés vs essais-récompenses (tableau §2).
 - *Pourquoi une seule voiture ?* → pour isoler l'effet de la conduite (§7, piège 3).
-- *Pourquoi l'arbre a 75 % et le modèle bête 86 % ?* → classe rare, regarder le rappel (§4, piège 1).
+- *Pourquoi l'arbre a 73,5 % et le modèle bête 82 % ?* → classe rare, regarder le rappel (§4, piège 1).
 - *Pourquoi Alice roule surtout vite ?* → rouler vite ne coûte rien et évite de se faire rattraper. Le modèle optimise la règle du jeu (§7, piège 2).
 - *Pourquoi ajouter la longueur dans l'état ?* → si le temps dépend de la longueur, Alice doit la voir pour décider (observabilité).
 - *Surapprentissage ?* → précision entraînement ≈ test, profondeur limitée à 4.
