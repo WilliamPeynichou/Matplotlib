@@ -26,7 +26,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe main.py  # Windows
 ```
 
-La fenêtre propose des curseurs pour régler le nombre de routes, le nombre d'intersections visé et le nombre de véhicules. Clique **Randomize** pour changer de réseau. Les boutons **Conduite** (en bas à droite) choisissent comment roulent les véhicules : **Hasard** (sortie et allure au hasard), **Règle** (à chaque intersection, une autre sortie que le dernier véhicule passé dans les 2 secondes) ou **Appris** (la conduite apprise par Q-learning, voir `train.py`).
+La fenêtre propose des curseurs pour régler le nombre de routes, le nombre d'intersections visé et le nombre de véhicules. Clique **Generate** pour changer de réseau (voir [Contrôles](#contrôles)). Les boutons **Conduite** (en bas à droite) choisissent comment roulent les véhicules : **Hasard** (sortie et allure au hasard), **Règle** (à chaque intersection, une autre sortie que le dernier véhicule passé dans les 2 secondes) ou **Appris** (la conduite apprise par Q-learning, voir `train.py`).
 
 Pour réentraîner la conduite apprise (environ 30 s, sans fenêtre ; écrit `q_table.json` et `docs/images/apprentissage.png`) :
 
@@ -36,6 +36,19 @@ Pour réentraîner la conduite apprise (environ 30 s, sans fenêtre ; écrit `q_
 ```
 
 La seed apparaît dans le titre et le terminal. Pour rejouer un réseau, mettre `SEED = 4821` dans `main.py`.
+
+### Contrôles
+
+| Contrôle | Rôle |
+|---|---|
+| **Seed** | champ texte : la seed du réseau affiché (entier de 0 à `MAX_SEED` = 99999). Ctrl+A (tout sélectionner), Ctrl+C (copier), Ctrl+V (coller). **Entrée** génère avec la seed écrite. |
+| **Randomize** | case cochée par défaut. Cochée : **Generate** tire une nouvelle seed. Décochée : **Generate** utilise la seed du champ. |
+| **Generate** | génère un nouveau réseau avec les réglages des curseurs. Seed invalide : message sous le réseau, le réseau actuel est gardé. |
+| **Historique** (icône horloge) | petite fenêtre avec les seeds déjà générées, la plus récente en haut, la seed active surlignée. Chaque seed se sélectionne et se copie (Ctrl+C) ; **▶ Activer** la recharge (case Randomize décochée). |
+
+La seed reste affichée dans le titre et le terminal.
+
+> **Linux** : le presse-papiers et la fenêtre Historique passent par Tk. Installer `python3-tk` (`sudo apt install python3-tk` sur Debian / Ubuntu). Sans Tk, la fenêtre fonctionne, mais sans copier / coller ni historique.
 
 Les intersections sont un nombre **visé** : si la combinaison taille de grille / nombre de routes ne permet pas le nombre demandé, le titre indique le nombre obtenu et le nombre demandé. La génération cherche le meilleur réseau après un nombre limité d'essais.
 
@@ -62,7 +75,7 @@ Réglages avancés : `SPEED` (vitesse moyenne), `MIN_SPEED_FACTOR` et `MAX_SPEED
 | Outil | Ce qu'il vérifie |
 |---|---|
 | `ruff` | style, imports, noms, bugs courants (config dans `pyproject.toml`) |
-| `pytest` (`test_roadnetwork.py` + `test_learning.py`, 137 tests) | une règle du projet = un test : START/END, toutes les routes vont au END, pas de croisement en X, types, doublons, même seed = même réseau, cas limites (grille 2×1, 0 et 10 routes), grille invalide = message clair, divergence des véhicules, vitesse propre de chaque véhicule, collisions (rattrapage, fusion, dépassement, contact compté une fois), conduites (règle, hasard, allure), collisions affichées, ce que voit un véhicule (sortie libre, véhicule devant, fusion, derrière), Q-learning (mise à jour calculée à la main, exploration, sauvegarde JSON), entraînement reproductible, durée des trajets, la conduite apprise bat le hasard et la règle, table apprise absente ou abîmée = retour à la règle, circulation cohérente avec les 3 conduites |
+| `pytest` (`test_roadnetwork.py` + `test_learning.py`, 138 tests) | une règle du projet = un test : START/END, toutes les routes vont au END, pas de croisement en X, types, doublons, même seed = même réseau, cas limites (grille 2×1, 0 et 10 routes), grille invalide = message clair, divergence des véhicules, vitesse propre de chaque véhicule, collisions (rattrapage, fusion, dépassement, contact compté une fois), conduites (règle, hasard, allure), collisions affichées, ce que voit un véhicule (sortie libre, véhicule devant, fusion, derrière), Q-learning (mise à jour calculée à la main, exploration, sauvegarde JSON), entraînement reproductible, durée des trajets, la conduite apprise bat le hasard et la règle, table apprise absente ou abîmée = retour à la règle, circulation cohérente avec les 3 conduites |
 | `check.py` | balayage de 120 réseaux (4 tailles × 30 seeds) ; sur chacun, les 3 conduites roulent 20 s : collisions bien comptées, trajets de durée positive, véhicules toujours sur une route |
 
 Grille invalide (`COLUMNS < 2` ou `ROWS < 1`) : le programme affiche un message clair au lieu de planter.
@@ -72,7 +85,7 @@ Grille invalide (`COLUMNS < 2` ou `ROWS < 1`) : le programme affiche un message 
 - Graphe de nodes et segments, cinq types de node.
 - Chemin principal et nombre réglable de routes secondaires.
 - Nombre d'intersections visé réglable ; génération cherche une solution proche.
-- Seed reproductible, Randomize.
+- Seed reproductible : champ Seed, case Randomize, bouton Generate, historique des seeds.
 - Construction animée, routes courbes et légende.
 - Aspect organique : chaque node est légèrement décalé à l'écran (`JITTER` dans `display.py`), même seed = même forme. Le modèle reste une grille, donc les règles et les tests ne changent pas.
 - Toutes les routes rejoignent le END (aucun cul-de-sac).

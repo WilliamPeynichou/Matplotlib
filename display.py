@@ -8,14 +8,19 @@ import time
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
 from matplotlib.lines import Line2D
-from matplotlib.patches import PathPatch
+from matplotlib.patches import Arc, Circle, PathPatch, Polygon
 from matplotlib.path import Path
-from matplotlib.widgets import Button, RadioButtons, Slider
+from matplotlib.widgets import Button, CheckButtons, RadioButtons, Slider, TextBox
 
 from learning import DRIVINGS, make_policy
 from models import Node, NodeType, Segment
 from network import RoadNetwork
 from traffic import Traffic
+
+try:
+    import tkinter as tk
+except ImportError:  # Linux sans python3-tk : pas de presse-papiers ni d'historique
+    tk = None
 
 COLORS = {
     NodeType.UNUSED: "#D0D4DA",
@@ -59,6 +64,9 @@ FIGURE_SIZE = (10, 7)
 MAX_ROADS = 10
 MAX_INTERSECTIONS = 15
 MAX_VEHICLES = 20
+SELECTION_COLOR = "#B3D4FC"  # fond du champ seed après Ctrl+A, seed active de l'historique
+MODIFIER_KEYS = ("control", "shift", "alt", "super", "cmd")  # seules, elles ne tapent rien
+ICON_COLOR = "#303844"  # icône historique
 
 
 def get_position(node: Node) -> tuple[float, float]:
@@ -166,6 +174,18 @@ def draw_step(ax, network: RoadNetwork, index: int) -> None:
         draw_shortest_path(ax, network)
 
 
+def draw_history_icon(ax) -> None:
+    """Icône historique : une horloge (cercle + 2 aiguilles) et une flèche en arc anti-horaire."""
+    ax.set_aspect("equal", adjustable="datalim")  # cercle rond même si le bouton est large
+    ax.add_patch(Circle((0.5, 0.5), 0.2, fill=False, edgecolor=ICON_COLOR, linewidth=1.2))
+    ax.plot([0.5, 0.5, 0.6], [0.63, 0.5, 0.5], color=ICON_COLOR, linewidth=1.2,
+            solid_capstyle="round")
+    ax.add_patch(Arc((0.5, 0.5), 0.72, 0.72, theta1=150, theta2=450, edgecolor=ICON_COLOR,
+                     linewidth=1.2))
+    # pointe au bout de l'arc (en haut), tournée vers la gauche : sens anti-horaire
+    ax.add_patch(Polygon([(0.38, 0.86), (0.5, 0.95), (0.5, 0.77)], color=ICON_COLOR))
+
+
 def get_vehicle_positions(traffic: Traffic) -> list[tuple[float, float]]:
     """Position (x, y) de chaque véhicule parti."""
     positions = []
@@ -193,12 +213,20 @@ def get_recent_crashes(traffic: Traffic) -> list[tuple[float, float, float]]:
 class NetworkView:
     """La fenêtre : construit le réseau en animation, puis fait rouler les véhicules."""
 
-    def __init__(self, network: RoadNetwork, seed: int, settings: dict, generate, new_seed):
+    def __init__(self, network: RoadNetwork, seed: int, settings: dict, generate, new_seed,
+                 max_seed: int):
         self.network = network
         self.seed = seed
         self.settings = settings  # {"roads", "intersections", "vehicles" : int, "driving" : str}
         self.generate = generate  # generate(seed, roads, intersections) -> intersections
         self.new_seed = new_seed  # new_seed() -> int
+        self.max_seed = max_seed
+        self.history = []  # seeds générées, dans l'ordre
+        self.history_window = None
+        self.history_rows = None  # cadre Tk des lignes de l'historique
+        self.writing_seed = False  # set_val déclenche on_submit : évite la boucle
+        self.enter_pressed = False  # on_submit vient aussi d'un clic hors du champ
+        self.select_all = False  # après Ctrl+A, la prochaine frappe remplace tout
         self.animation = None
         self.fig, self.ax = plt.subplots(figsize=FIGURE_SIZE)
         self.fig.canvas.manager.set_window_title("RoadNetwork")
@@ -209,11 +237,13 @@ class NetworkView:
         self.notice = ""  # message si la conduite demandée n'a pas pu être chargée
         self.background = None  # image du réseau sans véhicules (blitting)
         self.fig.canvas.mpl_connect("draw_event", self.on_draw)
+        # Avant create_controls : on_key passe avant le TextBox et peut changer son texte.
+        self.fig.canvas.mpl_connect("key_press_event", self.on_key)
         self.create_controls()
         self.regenerate()
 
     def create_controls(self) -> None:
-        """Curseurs (routes, intersections, véhicules), bouton Randomize, choix de la conduite."""
+        """Curseurs, champ seed, Randomize, Generate, historique, choix de la conduite."""
         self.roads_slider = Slider(self.fig.add_axes([0.25, 0.17, 0.45, 0.03]), "Routes",
                                    1, MAX_ROADS, valinit=self.settings["roads"], valstep=1)
         self.intersections_slider = Slider(
@@ -222,16 +252,37 @@ class NetworkView:
         self.vehicles_slider = Slider(self.fig.add_axes([0.25, 0.07, 0.45, 0.03]), "Véhicules",
                                       0, MAX_VEHICLES, valinit=self.settings["vehicles"],
                                       valstep=1)
-        self.button = Button(self.fig.add_axes([0.42, 0.01, 0.16, 0.045]), "Randomize")
+        self.seed_box = TextBox(self.fig.add_axes([0.1, 0.01, 0.1, 0.045]), "Seed",
+                                initial=str(self.seed))
+        # useblit=False partout : sinon les widgets se dessinent à part, hors de self.background,
+        # et update_frame recolle un fond où la case, le point radio ou le survol sont anciens.
+        self.history_button = Button(self.fig.add_axes([0.205, 0.01, 0.035, 0.045]), "",
+                                     useblit=False)
+        draw_history_icon(self.history_button.ax)
+        self.randomize_check = CheckButtons(
+            self.fig.add_axes([0.25, 0.01, 0.15, 0.045], frame_on=False), ["Randomize"], [True],
+            useblit=False)
+        self.button = Button(self.fig.add_axes([0.42, 0.01, 0.16, 0.045]), "Generate",
+                             useblit=False)
         self.roads_slider.on_changed(self.on_network_change)
         self.intersections_slider.on_changed(self.on_network_change)
         self.vehicles_slider.on_changed(self.on_vehicles_change)
-        self.button.on_clicked(self.on_randomize)
+        self.seed_box.on_submit(self.on_submit)
+        self.history_button.on_clicked(self.on_history)
+        self.button.on_clicked(self.on_generate)
+        self.randomize_check.on_clicked(self.on_randomize_change)
         driving_ax = self.fig.add_axes([0.81, 0.03, 0.17, 0.17], frame_on=False)
         driving_ax.set_title("Conduite", fontsize=10, loc="left")
         self.driving_radio = RadioButtons(driving_ax, list(DRIVINGS.values()),
-                                          active=list(DRIVINGS).index(self.settings["driving"]))
+                                          active=list(DRIVINGS).index(self.settings["driving"]),
+                                          useblit=False)
         self.driving_radio.on_clicked(self.on_driving_change)
+
+    def on_randomize_change(self, label: str) -> None:
+        """Case Randomize : redessin complet, on_draw recapture le fond avec la case à jour.
+        L'état n'est pas copié ici : on_generate le lit dans la case au moment du clic."""
+        self.background = None  # pas de blitting avec l'ancien fond d'ici le redessin
+        self.fig.canvas.draw_idle()
 
     def on_driving_change(self, label: str) -> None:
         """Boutons de conduite : même réseau, on relance la circulation avec la nouvelle."""
@@ -255,15 +306,168 @@ class NetworkView:
         self.settings["vehicles"] = int(self.vehicles_slider.val)
         self.start_traffic()
 
-    def on_randomize(self, event) -> None:
-        """Bouton : nouvelle seed, mêmes réglages."""
-        self.seed = self.new_seed()
+    def on_generate(self, event) -> None:
+        """Bouton Generate : nouvelle seed si Randomize est coché, sinon la seed du champ."""
+        if self.randomize_check.get_status()[0]:
+            self.seed = self.new_seed()
+            self.regenerate()
+        else:
+            self.generate_from_text(self.seed_box.text)
+
+    def on_submit(self, text: str) -> None:
+        """Entrée dans le champ seed : génère avec la seed écrite."""
+        if self.writing_seed or not self.enter_pressed:
+            return  # set_val, ou simple clic hors du champ
+        self.enter_pressed = False
+        self.generate_from_text(text)
+
+    def generate_from_text(self, text: str) -> None:
+        """Génère avec la seed écrite ; si elle est invalide, garde la précédente."""
+        try:
+            seed = int(text)
+        except ValueError:
+            seed = -1
+        if not 0 <= seed <= self.max_seed:
+            self.notice = f"Seed invalide {text.strip()!r} : entier de 0 à {self.max_seed}."
+            self.info.set_text(self.notice)
+            self.fig.canvas.draw_idle()
+            return
+        self.seed = seed
+        self.regenerate()
+
+    def write_seed(self, seed: int) -> None:
+        """Écrit la seed dans le champ sans déclencher on_submit."""
+        self.writing_seed = True
+        self.seed_box.set_val(str(seed))
+        self.writing_seed = False
+        self.seed_box.cursor_index = len(self.seed_box.text)
+        if not self.seed_box.capturekeystrokes:
+            self.seed_box.cursor.set_visible(False)  # set_val affiche le curseur
+
+    def on_key(self, event) -> None:
+        """Raccourcis du champ seed : Ctrl+A, Ctrl+C, Ctrl+V. Le TextBox traite la touche après."""
+        box = self.seed_box
+        if not box.capturekeystrokes or event.key is None:
+            return
+        key = event.key
+        self.enter_pressed = key in ("enter", "return")
+        if key == "ctrl+a":
+            self.set_select_all(True)
+            return
+        if key == "ctrl+c":
+            self.set_clipboard(box.text)
+            return
+        if key in MODIFIER_KEYS:
+            return
+        if self.select_all and (len(key) == 1 or key in ("backspace", "delete", "ctrl+v")):
+            box.text_disp.set_text("")  # tout est sélectionné : la frappe remplace le texte
+            box.cursor_index = 0
+        self.set_select_all(False)
+        if key == "ctrl+v":
+            pasted = self.get_clipboard().strip()
+            text, index = box.text, box.cursor_index
+            box.text_disp.set_text(text[:index] + pasted + text[index:])
+            box.cursor_index = index + len(pasted)
+
+    def set_select_all(self, selected: bool) -> None:
+        """Ctrl+A : surligne tout le champ seed."""
+        self.select_all = selected
+        if selected:
+            self.seed_box.text_disp.set_backgroundcolor(SELECTION_COLOR)
+        else:
+            self.seed_box.text_disp.set_bbox(None)
+
+    def get_tk_widget(self):
+        """Le widget Tk derrière Matplotlib, ou None (autre backend, ou tkinter absent)."""
+        if tk is None or not hasattr(self.fig.canvas, "get_tk_widget"):
+            return None
+        return self.fig.canvas.get_tk_widget()
+
+    def get_clipboard(self) -> str:
+        """Texte du presse-papiers ("" s'il est vide ou inaccessible)."""
+        widget = self.get_tk_widget()
+        if widget is None:
+            return ""
+        try:
+            return widget.clipboard_get()
+        except tk.TclError:  # presse-papiers vide ou pas du texte
+            return ""
+
+    def set_clipboard(self, text: str) -> None:
+        """Copie le texte dans le presse-papiers (rien si pas de Tk)."""
+        widget = self.get_tk_widget()
+        if widget is not None:
+            widget.clipboard_clear()
+            widget.clipboard_append(text)
+
+    def on_history(self, event) -> None:
+        """Bouton ↺ : petite fenêtre avec l'historique des seeds (une seule à la fois)."""
+        if self.history_window is not None and self.history_window.winfo_exists():
+            self.history_window.lift()
+            self.history_window.focus_set()
+            return
+        widget = self.get_tk_widget()
+        if widget is None:
+            self.notice = "Historique indisponible : il faut le backend Tk (python3-tk)."
+            self.info.set_text(self.notice)
+            self.fig.canvas.draw_idle()
+            return
+        window = tk.Toplevel(widget)
+        # liée à la fenêtre du jeu : reste devant, se minimise avec elle (pas de grab_set :
+        # la fenêtre du jeu doit rester cliquable)
+        window.transient(widget.winfo_toplevel())
+        window.title("Historique des seeds")
+        window.geometry("230x320")
+        # Liste qui défile : un cadre dans un Canvas Tk, avec une barre de défilement.
+        scroll_canvas = tk.Canvas(window, highlightthickness=0)
+        scrollbar = tk.Scrollbar(window, orient="vertical", command=scroll_canvas.yview)
+        scroll_canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        scroll_canvas.pack(side="left", fill="both", expand=True)
+        self.history_rows = tk.Frame(scroll_canvas)
+        scroll_canvas.create_window((0, 0), window=self.history_rows, anchor="nw")
+        self.history_rows.bind("<Configure>", lambda e: scroll_canvas.configure(
+            scrollregion=scroll_canvas.bbox("all")))
+        window.bind("<MouseWheel>",  # molette (Windows, macOS)
+                    lambda e: scroll_canvas.yview_scroll(-1 if e.delta > 0 else 1, "units"))
+        window.bind("<Button-4>", lambda e: scroll_canvas.yview_scroll(-1, "units"))  # Linux
+        window.bind("<Button-5>", lambda e: scroll_canvas.yview_scroll(1, "units"))
+        self.history_window = window
+        self.refresh_history()
+
+    def refresh_history(self) -> None:
+        """Redessine la liste si la fenêtre est ouverte : plus récente en haut, active surlignée."""
+        if self.history_window is None or not self.history_window.winfo_exists():
+            return
+        for row in self.history_rows.winfo_children():
+            row.destroy()
+        for seed in reversed(self.history):
+            row = tk.Frame(self.history_rows)
+            row.pack(fill="x", padx=6, pady=2)
+            text = tk.StringVar(row, str(seed))
+            background = SELECTION_COLOR if seed == self.seed else "white"
+            # readonly : on ne peut pas modifier, mais sélection + Ctrl+C restent possibles
+            tk.Entry(row, textvariable=text, width=10, state="readonly",
+                     readonlybackground=background).pack(side="left")
+            tk.Button(row, text="▶ Activer",
+                      command=lambda seed=seed: self.on_activate(seed)).pack(side="left", padx=4)
+            row.text = text  # garder une référence, sinon Tk vide le champ
+
+    def on_activate(self, seed: int) -> None:
+        """Bouton Activer de l'historique : seed dans le champ, Randomize décoché, régénère."""
+        if self.randomize_check.get_status()[0]:
+            self.randomize_check.set_active(0)
+        self.seed = seed
         self.regenerate()
 
     def regenerate(self) -> None:
         """Génère le réseau puis rejoue sa construction."""
         self.intersections = self.generate(self.seed, self.settings["roads"],
                                            self.settings["intersections"])
+        if self.seed not in self.history:  # une seed déjà présente n'est pas ajoutée deux fois
+            self.history.append(self.seed)
+        self.refresh_history()  # nouvelle ligne ou nouvelle seed surlignée
+        self.write_seed(self.seed)
         self.restart(build=True)
 
     def start_traffic(self) -> None:
@@ -365,8 +569,9 @@ class NetworkView:
         self.info.set_text(info + (f"\n{self.notice}" if self.notice else ""))
 
 
-def show(network: RoadNetwork, seed: int, settings: dict, generate, new_seed) -> None:
+def show(network: RoadNetwork, seed: int, settings: dict, generate, new_seed,
+         max_seed: int) -> None:
     """Ouvre la fenêtre et attend sa fermeture."""
-    view = NetworkView(network, seed, settings, generate, new_seed)
-    view.fig.view = view  # garder une référence (animation, curseurs, bouton)
+    view = NetworkView(network, seed, settings, generate, new_seed, max_seed)
+    view.fig.view = view  # garder une référence (animation, curseurs, boutons, champ seed)
     plt.show()

@@ -46,10 +46,10 @@ def main() -> None:
         return count
 
     def new_seed() -> int:
-        """Tire une nouvelle seed pour le bouton Randomize."""
+        """Tire une nouvelle seed pour le bouton Generate (Randomize coché)."""
         return random.randint(0, MAX_SEED)
 
-    show(network, create_seed(), settings, generate, new_seed)
+    show(network, create_seed(), settings, generate, new_seed, MAX_SEED)
 
 
 if __name__ == "__main__":

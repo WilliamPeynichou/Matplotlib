@@ -54,6 +54,14 @@ def test_meme_seed_meme_reseau():
     assert snapshot(build(seed=42, intersections=4)) == snapshot(build(seed=42, intersections=4))
 
 
+def test_generate_meme_seed_deux_fois_meme_reseau():
+    network = build(seed=4821, intersections=4)
+    first = snapshot(network)
+    generate_network(network, 7, 4, 4)  # une autre seed entre les deux, comme avec Generate
+    generate_network(network, 4821, 4, 4)
+    assert snapshot(network) == first
+
+
 def test_seeds_differentes_reseaux_differents():
     assert snapshot(build(seed=1)) != snapshot(build(seed=2))
 
