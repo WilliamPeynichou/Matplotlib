@@ -74,17 +74,19 @@ def test_troncon_long_prend_plus_de_temps_pour_alice():
     circuit.generate(1, 3, 6)
     traffic = Traffic(circuit, 2, seed=1, special={ALICE: RulePolicy()})
     alice, bruno = traffic.vehicles
-    assert alice.distance_aware and not bruno.distance_aware
+    assert alice.distance_aware and bruno.distance_aware  # mêmes règles pour tous
     frame = circuit.frames[0]
     short = (frame.get_node(2, 2), frame.get_node(3, 2))
     long = (frame.get_node(2, 3), frame.get_node(3, 4))  # diagonale côté extérieur de l'arc
     assert circuit.get_length(*long) > circuit.get_length(*short)
+    alice.current, alice.target = long
+    bruno.current, bruno.target = short
     for vehicle in (alice, bruno):
-        vehicle.current, vehicle.target, vehicle.progress, vehicle.speed = *long, 0.0, 1.0
-    alice.length = traffic.get_length(alice)
+        vehicle.progress, vehicle.speed = 0.0, 1.0
+        vehicle.length = traffic.get_length(vehicle)
     traffic.time = 10
     traffic.update(0.1)
-    assert alice.progress < bruno.progress  # même vitesse, mais Alice paie la longueur
+    assert alice.progress < bruno.progress  # même vitesse, tronçon long = plus lent
 
 
 def test_alice_voit_la_longueur_des_sorties():
@@ -105,10 +107,10 @@ def test_les_autres_gardent_les_memes_regles():
     traffic = Traffic(circuit, 5, seed=1)
     for _ in range(100):
         traffic.update(0.1)
-    assert all(not v.distance_aware and v.length == 1.0 for v in traffic.vehicles)
+    assert all(v.distance_aware for v in traffic.vehicles)
 
 
-def test_carburant_rapide_coute_plus_et_seulement_pour_alice():
+def test_carburant_rapide_coute_plus_pour_tous():
     from traffic import FUEL
     assert FUEL["fast"] > FUEL["normal"] > FUEL["slow"]
     circuit = Circuit(10, 5)
@@ -118,7 +120,7 @@ def test_carburant_rapide_coute_plus_et_seulement_pour_alice():
         traffic.update(0.1)
     alice, *others = traffic.vehicles
     assert alice.fuel == pytest.approx(alice.distance)  # Règle = allure normale = 1 par unité
-    assert all(v.fuel == 0 for v in others)
+    assert all(v.fuel == pytest.approx(v.distance) for v in others)
 
 
 def test_alice_rl_paie_le_carburant():

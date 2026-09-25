@@ -87,9 +87,11 @@ class Traffic:
                 for i in range(count)
             ]
         self.lengths = {}  # (node, node) -> longueur, calculée une fois
-        for number in self.special:  # les voitures spéciales (Alice) roulent aux vraies distances
-            if number < len(self.vehicles):
-                self.vehicles[number].distance_aware = True
+        # Circuit : TOUTES les voitures suivent les mêmes règles (vraies distances + carburant).
+        # Seule Alice apprend ; les autres gardent leur conduite fixe.
+        if hasattr(network, "frames"):  # uniquement sur le circuit
+            for vehicle in self.vehicles:
+                vehicle.distance_aware = True
         self.passages = {}  # node -> [(instant, sortie choisie)], mémoire de la règle
         self.decisions = []  # historique de la règle, utilisé par check.py
         self.forced_divergences = 0

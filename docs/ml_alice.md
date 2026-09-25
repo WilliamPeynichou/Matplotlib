@@ -126,11 +126,11 @@ q = q + 0.1 × (récompense + 0.9 × meilleur q de la situation suivante − q)
 
 ---
 
-## 6. Les distances : un tronçon long prend plus de temps (Alice seule)
+## 6. Les distances : un tronçon long prend plus de temps (toutes les voitures)
 
 **Problème observé** : Alice choisissait presque toujours « rapide ». Normal : elle ne voyait pas la route. Tous les tronçons duraient pareil, qu'ils soient courts ou longs.
 
-**Correction** (seulement pour Alice, les autres gardent les mêmes règles) :
+**Correction** (pour **toutes** les voitures : mêmes règles physiques, seule Alice apprend) :
 - Vitesse de base générale, identique pour tous.
 - Temps sur un tronçon = longueur / vitesse. Dans le code : `progress += speed × dt / length`.
 - Longueur = longueur **réelle à l'écran** (`Circuit.get_length`) : l'extérieur de l'arc est plus long que l'intérieur, une diagonale plus longue qu'un tout droit. Entre 0,9 et 2,0 cases.
@@ -146,7 +146,7 @@ q = q + 0.1 × (récompense + 0.9 × meilleur q de la situation suivante − q)
 
 **Problème observé** (grâce au compteur d'allures) : Alice roulait à 90-100 % en « rapide ». Rien ne l'en empêchait.
 
-**Correction** : un carburant, **pour Alice seulement**.
+**Correction** : un carburant, pour **toutes** les voitures (même règle pour tous). Seule Alice en tient compte pour décider : les autres gardent la Règle, elles n'apprennent pas.
 - Consommation d'un tronçon = `FUEL[allure] × longueur`, avec `FUEL = lent 0,5 · normal 1 · rapide 2` (`traffic.py`). Donc rapide = 2× plus cher, et un tronçon long coûte plus.
 - **RL** (`AliceAgent.choose`) : la récompense perd `FUEL_COST (0,15) × consommation`. Alice doit maintenant comparer trois choses : le temps (−0,1/s), le carburant et les collisions (−10).
 - **Arbre** (`TreePolicy`) : score = risque + malus lenteur + `FUEL_WEIGHT (0,007) × consommation`.
@@ -158,18 +158,33 @@ q = q + 0.1 × (récompense + 0.9 × meilleur q de la situation suivante − q)
 
 | Conduite d'Alice | Collisions / min | Tours / 60 s | Carburant / distance | Allures lent / normal / rapide |
 |---|---:|---:|---:|---|
-| Hasard | 9,23 | 1,03 | 1,19 | 31 % / 34 % / 35 % |
-| Règle | 6,57 | 1,20 | 1,00 | 0 % / 100 % / 0 % |
-| Arbre (supervisé) | 7,87 | 1,70 | 1,58 | 0 % / 35 % / 65 % |
-| RL (Q-learning, 3000 épisodes) | **4,07** | **1,97** | 1,72 | 2 % / 25 % / 73 % |
+| Hasard | 10,70 | 1,03 | 1,16 | 33 % / 35 % / 32 % |
+| Règle | 3,23 | 1,17 | 1,00 | 0 % / 100 % / 0 % |
+| Arbre (supervisé) | 2,30 | **1,73** | 1,59 | 0 % / 34 % / 66 % |
+| RL (Q-learning, 3000 épisodes) | **1,53** | 1,47 | 1,56 | 7 % / 35 % / 58 % |
 
-Avant le carburant, pour comparer : Arbre 2,53 collisions/min à 100 % rapide ; RL 2,77 à 91 % rapide.
+Toutes les voitures roulent aux mêmes règles (distances + carburant) ; seule Alice change de conduite.
+
+### Est-ce qu'Alice apprend ? La courbe d'apprentissage
+
+![Courbe d'apprentissage](images/alice_apprentissage.png)
+
+Collisions/min d'Alice pendant l'entraînement (moyenne par tranche de 300 épisodes) :
+
+| Épisodes | 300 | 900 | 1500 | 2100 | 2400 | 3000 |
+|---|---:|---:|---:|---:|---:|---:|
+| epsilon (hasard) | 0,88 | 0,63 | 0,38 | 0,13 | 0,05 | 0,05 |
+| Alice coll/min | 9,09 | 7,41 | 4,94 | 2,97 | 1,59 | 1,62 |
+
+**Réponse : oui.** Au début elle roule presque au hasard (~9 coll/min). À la fin elle passe **sous la ligne de la Règle** (3,23). La courbe s'aplatit quand epsilon atteint 0,05 : elle a fini d'apprendre.
 
 ### Lecture
-- **Alice module sa vitesse** : le RL passe de 7 % à 25 % en allure normale. Le carburant a changé son comportement.
-- **Le RL reste le meilleur** : le moins de collisions, le plus de tours. Il fait un **compromis**, parce qu'il additionne temps, carburant et collisions dans une seule récompense.
-- **Le prix du compromis** : un peu plus de collisions qu'avant le carburant (2,77 → 4,07). Moins vite = plus souvent rattrapée par derrière. C'est un vrai choix, pas un bug.
+- **Alice module sa vitesse** : RL 7 % lent / 35 % normal / 58 % rapide. Le carburant a changé son comportement.
+- **Le RL a le moins de collisions** (1,53, soit 2× moins que la Règle). Il fait un **compromis** entre temps, carburant et collisions, additionnés dans une seule récompense.
+- **L'arbre fait plus de tours** mais a plus de collisions : il privilégie la vitesse.
 - **L'arbre gère mal le compromis.** Selon `FUEL_WEIGHT`, il passe d'un extrême à l'autre :
+
+*(Mesures faites avant que les autres voitures aient les mêmes règles.)*
 
 | `FUEL_WEIGHT` | 0,005 | 0,006 | **0,007** | 0,008 | 0,01 |
 |---|---|---|---|---|---|

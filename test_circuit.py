@@ -82,7 +82,7 @@ def test_vehicules_passent_par_les_4_cadres():
     circuit = build()
     traffic = Traffic(circuit, 1, seed=3)
     frames = set()
-    for _ in range(400):
+    for _ in range(800):
         traffic.update(0.05)
         frames.add(traffic.vehicles[0].current.frame)
     assert frames == set(range(FRAMES))

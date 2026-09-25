@@ -29,6 +29,7 @@ ROOT = Path(__file__).parent
 ALICE = 0  # numéro de la voiture étudiée (0 = Alice)
 Q_ALICE_FILE = ROOT / "q_alice.json"
 RESULT_IMAGE = ROOT / "docs" / "images" / "alice.png"
+CURVE_IMAGE = ROOT / "docs" / "images" / "alice_apprentissage.png"
 RL_EPISODES = 3000
 FUEL_COST = 0.15  # récompense perdue par unité de carburant (le « prix du litre »)
 MIN_EPSILON = 0.05
@@ -62,12 +63,17 @@ def train_alice(episodes: int = RL_EPISODES, seed: int = 1) -> QAgent:
     puis elle utilise de plus en plus ce qu'elle a appris (epsilon -> 0.05)."""
     agent = AliceAgent(learning=True, seed=seed)
     rng = random.Random(seed)
+    agent.history = []  # collisions/min d'Alice à chaque épisode = sa courbe d'apprentissage
     for index in range(episodes):
         agent.epsilon = max(MIN_EPSILON, 1 - index / (0.8 * episodes))
-        run_circuit(FIRST_SEED + rng.randrange(100_000), RulePolicy(), special={ALICE: agent})
+        traffic = run_circuit(FIRST_SEED + rng.randrange(100_000), RulePolicy(),
+                              special={ALICE: agent})
+        agent.history.append(traffic.vehicles[ALICE].collisions / (EPISODE_TIME / 60))
         agent.forget()
-        if (index + 1) % max(1, episodes // 5) == 0:
+        if (index + 1) % max(1, episodes // 10) == 0:
+            recent = agent.history[-max(1, episodes // 10):]
             print(f"   épisode {index + 1}/{episodes}  ·  epsilon {agent.epsilon:.2f}  ·  "
+                  f"Alice {sum(recent) / len(recent):.2f} coll/min  ·  "
                   f"états connus {len(agent.q)}")
     agent.learning = False  # fini d'apprendre : maintenant elle applique
     agent.epsilon = 0.0
@@ -126,10 +132,35 @@ def draw(results: dict, path: Path = RESULT_IMAGE) -> None:
     figure.savefig(path, dpi=90)
 
 
+def draw_curve(history: list, rule_level: float, path: Path = CURVE_IMAGE) -> None:
+    """Courbe d'apprentissage : si Alice apprend, la courbe descend sous la ligne « Règle »."""
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+
+    window = max(1, len(history) // 30)  # moyenne glissante : lisse le bruit d'un épisode
+    smooth = []
+    for i in range(len(history)):
+        chunk = history[max(0, i - window + 1):i + 1]
+        smooth.append(sum(chunk) / len(chunk))
+    figure = Figure(figsize=(9, 4))
+    FigureCanvasAgg(figure)
+    axis = figure.subplots()
+    axis.plot(history, color="#cfcfcf", linewidth=0.5, label="un épisode")
+    axis.plot(smooth, color="#2a78d6", linewidth=2, label=f"moyenne sur {window} épisodes")
+    axis.axhline(rule_level, color="#d64545", linestyle="--", label="Règle (n'apprend pas)")
+    axis.set_xlabel("épisode d'entraînement")
+    axis.set_ylabel("collisions d'Alice / min")
+    axis.set_title("Est-ce qu'Alice apprend ? (plus bas = mieux)")
+    axis.legend()
+    figure.tight_layout()
+    figure.savefig(path, dpi=90)
+
+
 def main() -> None:
     episodes = int(sys.argv[1]) if len(sys.argv) > 1 else RL_EPISODES
     print(f"1. Entraînement RL d'Alice ({episodes} épisodes, les autres roulent à la Règle)…")
-    train_alice(episodes).save(Q_ALICE_FILE)
+    agent = train_alice(episodes)
+    agent.save(Q_ALICE_FILE)
     print(f"   table -> {Q_ALICE_FILE.name}")
     print(f"2. Comparaison sur {len(TEST_SEEDS)} circuits jamais vus…")
     results = {name: measure(make) for name, make in make_alice_policies().items()}
@@ -140,7 +171,8 @@ def main() -> None:
         print(f"   {name:<8} {r['alice']:>15.2f} {r['tours']:>12.2f} {r['autres']:>16.2f}"
               f" {r['carburant']:>15.2f}   {slow:>5.0%} / {normal:>4.0%} / {fast:>4.0%}")
     draw(results)
-    print(f"3. Graphique -> {RESULT_IMAGE.relative_to(ROOT)}")
+    draw_curve(agent.history, results["Règle"]["alice"])
+    print(f"3. Graphiques -> {RESULT_IMAGE.relative_to(ROOT)}, {CURVE_IMAGE.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
