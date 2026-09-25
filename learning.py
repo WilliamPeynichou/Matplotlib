@@ -57,6 +57,19 @@ def get_state(traffic: Traffic, vehicle: Vehicle, node: Node,
     return (*directions, fast, behind)
 
 
+SHORT, LONG = 1.15, 1.45  # bornes des longueurs : court < 1.15 <= moyen < 1.45 <= long
+
+
+def get_length_classes(traffic: Traffic, node: Node, exits: list[Node]) -> tuple[int, int, int]:
+    """Longueur de chaque sortie (descendre, tout droit, monter), en 4 classes :
+    0 pas de sortie, 1 court, 2 moyen, 3 long. Sert à Alice (elle roule aux vraies distances)."""
+    classes = [0, 0, 0]
+    for target in exits:
+        length = traffic.network.get_length(node, target)
+        classes[target.y - node.y + 1] = 1 if length < SHORT else 2 if length < LONG else 3
+    return tuple(classes)
+
+
 def get_exit_state(vehicle: Vehicle, node: Node, target: Node, others: list[Vehicle]) -> int:
     """FREE, BUSY ou DANGER pour la sortie node -> target, vue à allure normale."""
     my_arrival = 1 / vehicle.base_speed  # temps pour atteindre target à allure normale
@@ -82,6 +95,8 @@ class QAgent(Policy):
     learning=False (par défaut) : prend toujours la meilleure action connue, sans rien changer.
     """
 
+    state_size = STATE_SIZE  # taille de l'état (sert à vérifier une table relue)
+
     def __init__(self, learning: bool = False, epsilon: float = 0.0, seed: int = 0):
         self.q = {}  # état -> [valeur de chacune des 9 actions]
         self.learning = learning
@@ -92,7 +107,7 @@ class QAgent(Policy):
     def choose(self, traffic: Traffic, vehicle: Vehicle, node: Node,
                exits: list[Node]) -> tuple[Node, str]:
         """Meilleure action connue parmi les directions qui existent (ou une au hasard)."""
-        state = get_state(traffic, vehicle, node, exits)
+        state = self.get_state(traffic, vehicle, node, exits)
         values = self.q.get(state, [0.0] * len(ACTIONS))
         allowed = [i for i, (direction, _) in enumerate(ACTIONS) if state[direction] != NO_EXIT]
         if self.learning and self.rng.random() < self.epsilon:
@@ -105,6 +120,11 @@ class QAgent(Policy):
         direction, pace = ACTIONS[action]
         target = next(exit_node for exit_node in exits if exit_node.y - node.y + 1 == direction)
         return target, pace
+
+    def get_state(self, traffic: Traffic, vehicle: Vehicle, node: Node,
+                  exits: list[Node]) -> tuple[int, ...]:
+        """Ce que voit l'agent. AliceAgent (alice.py) y ajoute la longueur des sorties."""
+        return get_state(traffic, vehicle, node, exits)
 
     def on_collision(self, traffic: Traffic, vehicle: Vehicle) -> None:
         """Punit la décision en cours du véhicule."""
@@ -149,7 +169,7 @@ class QAgent(Policy):
         agent = cls()
         for key, values in table.items():
             state = tuple(int(x) for x in key.split(","))
-            if (len(state) != STATE_SIZE or not isinstance(values, list)
+            if (len(state) != cls.state_size or not isinstance(values, list)
                     or len(values) != len(ACTIONS)
                     or not all(isinstance(v, int | float) for v in values)):
                 raise ValueError(f"table Q : ligne invalide {key!r}")

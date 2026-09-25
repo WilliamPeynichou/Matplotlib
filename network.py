@@ -1,5 +1,6 @@
 """Le plateau : la grille de nodes et les segments qui les relient (features 3 et 12)."""
 
+import math
 from collections import deque
 
 from models import Node, NodeType, Segment
@@ -68,6 +69,10 @@ class RoadNetwork:
             if node.type is NodeType.START:
                 return node
         return None
+
+    def get_length(self, a: Node, b: Node) -> float:
+        """Longueur du tronçon a -> b : 1 tout droit, ~1.41 en diagonale."""
+        return math.hypot(b.x - a.x, b.y - a.y)
 
     def get_next_start(self, end: Node) -> Node | None:
         """Où repart un véhicule arrivé au END : réseau simple = retour au START."""

@@ -67,3 +67,42 @@ def test_rl_alice_apprend_quelque_chose():
 
 def test_mesure_meme_seed_meme_resultat():
     assert measure(RulePolicy, seeds=[3]) == measure(RulePolicy, seeds=[3])
+
+
+def test_troncon_long_prend_plus_de_temps_pour_alice():
+    circuit = Circuit(10, 5)
+    circuit.generate(1, 3, 6)
+    traffic = Traffic(circuit, 2, seed=1, special={ALICE: RulePolicy()})
+    alice, bruno = traffic.vehicles
+    assert alice.distance_aware and not bruno.distance_aware
+    frame = circuit.frames[0]
+    short = (frame.get_node(2, 2), frame.get_node(3, 2))
+    long = (frame.get_node(2, 3), frame.get_node(3, 4))  # diagonale côté extérieur de l'arc
+    assert circuit.get_length(*long) > circuit.get_length(*short)
+    for vehicle in (alice, bruno):
+        vehicle.current, vehicle.target, vehicle.progress, vehicle.speed = *long, 0.0, 1.0
+    alice.length = traffic.get_length(alice)
+    traffic.time = 10
+    traffic.update(0.1)
+    assert alice.progress < bruno.progress  # même vitesse, mais Alice paie la longueur
+
+
+def test_alice_voit_la_longueur_des_sorties():
+    from alice import AliceAgent
+    circuit = Circuit(10, 5)
+    circuit.generate(1, 3, 6)
+    traffic = Traffic(circuit, 1, seed=1)
+    node = circuit.get_start()
+    exits = traffic.get_exits(node)
+    state = AliceAgent().get_state(traffic, traffic.vehicles[0], node, exits)
+    assert len(state) == AliceAgent.state_size == 8
+    assert all(value in (0, 1, 2, 3) for value in state[5:])
+
+
+def test_les_autres_gardent_les_memes_regles():
+    circuit = Circuit(10, 5)
+    circuit.generate(1, 3, 6)
+    traffic = Traffic(circuit, 5, seed=1)
+    for _ in range(100):
+        traffic.update(0.1)
+    assert all(not v.distance_aware and v.length == 1.0 for v in traffic.vehicles)

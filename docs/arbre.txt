@@ -1,46 +1,46 @@
 |--- derriere <= 0.50
-|   |--- tout_droit <= 1.50
+|   |--- descendre <= 1.50
+|   |   |--- monter <= 1.50
+|   |   |   |--- tout_droit <= 1.50
+|   |   |   |   |--- class: 0
+|   |   |   |--- tout_droit >  1.50
+|   |   |   |   |--- class: 1
+|   |   |--- monter >  1.50
+|   |   |   |--- direction <= 1.50
+|   |   |   |   |--- class: 0
+|   |   |   |--- direction >  1.50
+|   |   |   |   |--- class: 1
+|   |--- descendre >  1.50
+|   |   |--- descendre <= 2.50
+|   |   |   |--- direction <= 0.50
+|   |   |   |   |--- class: 1
+|   |   |   |--- direction >  0.50
+|   |   |   |   |--- class: 0
+|   |   |--- descendre >  2.50
+|   |   |   |--- direction <= 0.50
+|   |   |   |   |--- class: 1
+|   |   |   |--- direction >  0.50
+|   |   |   |   |--- class: 0
+|--- derriere >  0.50
+|   |--- allure <= 0.50
+|   |   |--- long_tout_droit <= 0.50
+|   |   |   |--- monter <= 2.50
+|   |   |   |   |--- class: 1
+|   |   |   |--- monter >  2.50
+|   |   |   |   |--- class: 1
+|   |   |--- long_tout_droit >  0.50
+|   |   |   |--- descendre <= 0.50
+|   |   |   |   |--- class: 1
+|   |   |   |--- descendre >  0.50
+|   |   |   |   |--- class: 1
+|   |--- allure >  0.50
 |   |   |--- monter <= 1.50
 |   |   |   |--- descendre <= 1.50
-|   |   |   |   |--- class: 0
+|   |   |   |   |--- class: 1
 |   |   |   |--- descendre >  1.50
 |   |   |   |   |--- class: 1
 |   |   |--- monter >  1.50
 |   |   |   |--- monter <= 2.50
 |   |   |   |   |--- class: 1
 |   |   |   |--- monter >  2.50
-|   |   |   |   |--- class: 1
-|   |--- tout_droit >  1.50
-|   |   |--- tout_droit <= 2.50
-|   |   |   |--- allure <= 1.50
-|   |   |   |   |--- class: 1
-|   |   |   |--- allure >  1.50
-|   |   |   |   |--- class: 1
-|   |   |--- tout_droit >  2.50
-|   |   |   |--- direction <= 0.50
-|   |   |   |   |--- class: 0
-|   |   |   |--- direction >  0.50
-|   |   |   |   |--- class: 1
-|--- derriere >  0.50
-|   |--- allure <= 0.50
-|   |   |--- descendre <= 0.50
-|   |   |   |--- direction <= 1.50
-|   |   |   |   |--- class: 1
-|   |   |   |--- direction >  1.50
-|   |   |   |   |--- class: 1
-|   |   |--- descendre >  0.50
-|   |   |   |--- direction <= 0.50
-|   |   |   |   |--- class: 1
-|   |   |   |--- direction >  0.50
-|   |   |   |   |--- class: 1
-|   |--- allure >  0.50
-|   |   |--- tout_droit <= 2.50
-|   |   |   |--- monter <= 1.50
-|   |   |   |   |--- class: 1
-|   |   |   |--- monter >  1.50
-|   |   |   |   |--- class: 1
-|   |   |--- tout_droit >  2.50
-|   |   |   |--- direction <= 0.50
-|   |   |   |   |--- class: 1
-|   |   |   |--- direction >  0.50
 |   |   |   |   |--- class: 1

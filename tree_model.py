@@ -7,7 +7,7 @@ Produit : data/decisions.csv   (les exemples collectés)
 
 Les 3 étapes, expliquées pas à pas dans docs/ml_alice.md :
 1. COLLECTER : on fait rouler des voitures au hasard et on note chaque décision
-   - X (features) = ce que voyait la voiture + ce qu'elle a choisi (7 nombres)
+   - X (features) = ce que voyait la voiture (dont la longueur des sorties) + son choix (10 nombres)
    - y (label)    = 1 si elle a eu une collision juste après, sinon 0
 2. ENTRAÎNER : l'arbre cherche les questions (« tout droit == DANGER ? ») qui séparent
    le mieux les décisions dangereuses des autres. On garde 20 % des exemples de côté
@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 from circuit import Circuit
-from learning import ACTIONS, NO_EXIT, get_state
+from learning import ACTIONS, NO_EXIT, get_length_classes, get_state
 from policies import PACES, Policy, RandomPolicy, RulePolicy
 from traffic import Traffic
 
@@ -34,7 +34,9 @@ TREE_IMAGE = ROOT / "docs" / "images" / "arbre.png"
 TREE_TEXT = ROOT / "docs" / "arbre.txt"
 
 # Colonnes du tableau d'exemples. Les 5 premières = get_state() de learning.py.
-FEATURES = ["descendre", "tout_droit", "monter", "rapide", "derriere", "direction", "allure"]
+FEATURES = ["descendre", "tout_droit", "monter", "rapide", "derriere",
+            "long_descendre", "long_tout_droit", "long_monter",  # 0 aucune 1 court 2 moyen 3 long
+            "direction", "allure"]
 PACE_NAMES = list(PACES)  # ["slow", "normal", "fast"] -> allure 0, 1, 2
 
 # Circuit utilisé pour collecter / évaluer (le même que main.py).
@@ -53,6 +55,11 @@ SLOW_PENALTY = 0.03  # petit malus pour les allures lentes (sinon « lent partou
 
 # ---------------------------------------------------------------- 1. COLLECTER
 
+def get_features(traffic, vehicle, node, exits) -> tuple[int, ...]:
+    """Ce que voit la voiture : état habituel + longueur de chaque sortie (8 nombres)."""
+    return (*get_state(traffic, vehicle, node, exits), *get_length_classes(traffic, node, exits))
+
+
 class RecorderPolicy(Policy):
     """Conduit au hasard (pour voir de tout) et note chaque décision + son résultat."""
 
@@ -65,7 +72,7 @@ class RecorderPolicy(Policy):
         """Choisit au hasard, puis ouvre un nouvel exemple (label = 0 pour l'instant)."""
         self.close(vehicle)  # la décision précédente est finie sans collision -> on la range
         target, pace = self.driver.choose(traffic, vehicle, node, exits)
-        state = get_state(traffic, vehicle, node, exits)
+        state = get_features(traffic, vehicle, node, exits)
         direction = target.y - node.y + 1  # 0 descendre, 1 tout droit, 2 monter
         self.pending[vehicle] = [*state, direction, PACE_NAMES.index(pace), 0]
         return target, pace
@@ -99,7 +106,9 @@ def collect(episodes: int = COLLECT_EPISODES) -> list[list[int]]:
     """Fait rouler des voitures au hasard sur `episodes` circuits. Renvoie les exemples."""
     recorder = RecorderPolicy()
     for index in range(episodes):
-        run_circuit(FIRST_SEED + index, recorder)
+        # special = tout le monde : toutes les voitures roulent aux vraies distances, comme Alice
+        run_circuit(FIRST_SEED + index, recorder,
+                    special={number: recorder for number in range(VEHICLES)})
         recorder.pending = {}  # trajets coupés par la fin de l'épisode : on les jette
     return recorder.rows
 
@@ -180,7 +189,7 @@ class TreePolicy(Policy):
         self.last_risks = {}  # véhicule -> {action: risque}, pour l'affichage / le debug
 
     def choose(self, traffic, vehicle, node, exits):
-        state = get_state(traffic, vehicle, node, exits)
+        state = get_features(traffic, vehicle, node, exits)
         actions = [(direction, pace) for direction, pace in ACTIONS
                    if state[direction] != NO_EXIT]  # seulement les sorties qui existent
         rows = [[*state, direction, PACE_NAMES.index(pace)] for direction, pace in actions]

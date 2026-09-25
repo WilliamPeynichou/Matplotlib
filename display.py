@@ -50,6 +50,7 @@ CURVED_ROADS = True  # False = segments droits
 JITTER = 0.3  # décalage max à l'écran ; < 0.5 garde l'ordre des nodes (aucun croisement)
 layout = {"seed": 0, "circuit": None}  # seed du décalage ; circuit affiché (ou None)
 ALICE_LABELS = {"tree": "arbre de décision (supervisé)", "rl": "Q-learning (renforcement)"}
+PACE_LABELS = {"slow": "lent", "normal": "normal", "fast": "rapide"}
 CURVE_SAMPLES = 12  # points par route dessinée
 CURVE_STRENGTH = 0.5  # 0 = droit, 0.5 = courbe douce
 FRAME_INTERVAL = 50  # millisecondes entre deux images (20 fps : fluide, CPU raisonnable)
@@ -212,6 +213,16 @@ def make_alice_policy(alice: str | None):
     return None
 
 
+def get_alice_lines(alice) -> list[str]:
+    """Ce que fait Alice en ce moment : allure, longueur du tronçon, répartition des allures."""
+    counts = alice.pace_counts
+    total = sum(counts.values()) or 1
+    return [f"  allure : {PACE_LABELS[alice.pace]}  ·  tronçon : {alice.length:.2f}",
+            "  allures choisies : " + " / ".join(f"{PACE_LABELS[p]} {counts[p] / total:.0%}"
+                                                  for p in counts),
+            f"  distance : {alice.distance:.1f}  (les longs tronçons prennent plus de temps)"]
+
+
 def get_ranking_text(traffic: Traffic, alice: str | None = None) -> str:
     """Classement : rang, prénom, tours, meilleur tour, collisions. Alice (ML) marquée."""
     lines = ["#  Prénom    Tours  Meilleur  Coll."]
@@ -224,6 +235,7 @@ def get_ranking_text(traffic: Traffic, alice: str | None = None) -> str:
                      f"{vehicle.collisions:>5}")
     if alice:
         lines.append(f"\n* Alice conduit avec : {ALICE_LABELS[alice]}")
+        lines.extend(get_alice_lines(traffic.vehicles[0]))
     return "\n".join(lines)
 
 

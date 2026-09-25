@@ -40,6 +40,13 @@ class Vehicle:
         self.best_lap = None  # meilleur temps de tour (secondes)
         self.lap_start = departure
         self.collisions = 0
+        # False (tout le monde) : chaque tronçon dure pareil. True (Alice) : plus un tronçon
+        # est long, plus il prend de temps (vitesse de base / longueur).
+        self.distance_aware = False
+        self.pace = "normal"  # allure choisie sur le tronçon en cours (observabilité)
+        self.length = 1.0  # longueur du tronçon en cours
+        self.pace_counts = {pace: 0 for pace in PACES}  # combien de fois chaque allure
+        self.distance = 0.0  # distance parcourue (vraies longueurs si distance_aware)
         self.current = start  # dernier node atteint
         self.target = None  # node vers lequel il roule (None = à l'arrêt)
         self.progress = 0.0  # 0 = sur current, 1 = sur target
@@ -76,6 +83,10 @@ class Traffic:
                         SPEED * speed_rng.uniform(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR))
                 for i in range(count)
             ]
+        self.lengths = {}  # (node, node) -> longueur, calculée une fois
+        for number in self.special:  # les voitures spéciales (Alice) roulent aux vraies distances
+            if number < len(self.vehicles):
+                self.vehicles[number].distance_aware = True
         self.passages = {}  # node -> [(instant, sortie choisie)], mémoire de la règle
         self.decisions = []  # historique de la règle, utilisé par check.py
         self.forced_divergences = 0
@@ -94,7 +105,7 @@ class Traffic:
             if vehicle.target is None:
                 self.leave(vehicle)
                 continue
-            vehicle.progress += vehicle.speed * dt
+            vehicle.progress += vehicle.speed * dt / vehicle.length
             if vehicle.progress >= 1:
                 vehicle.current = vehicle.target
                 vehicle.progress = 0.0
@@ -167,6 +178,17 @@ class Traffic:
         policy = self.policy_of(vehicle)
         vehicle.target, pace = policy.choose(self, vehicle, vehicle.current, exits)
         vehicle.speed = vehicle.base_speed * PACES[pace]
+        vehicle.pace = pace
+        vehicle.length = self.get_length(vehicle) if vehicle.distance_aware else 1.0
+        vehicle.pace_counts[pace] += 1
+        vehicle.distance += vehicle.length
+
+    def get_length(self, vehicle: Vehicle) -> float:
+        """Longueur du tronçon en cours du véhicule (mise en cache)."""
+        key = (vehicle.current, vehicle.target)
+        if key not in self.lengths:
+            self.lengths[key] = self.network.get_length(*key)
+        return self.lengths[key]
 
     def policy_of(self, vehicle: Vehicle):
         """Conduite de ce véhicule : la sienne s'il en a une, sinon celle de tout le monde."""

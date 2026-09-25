@@ -16,6 +16,7 @@ from models import Node, NodeType
 from network import RoadNetwork
 
 FRAMES = 4
+LENGTH_STEPS = 4  # morceaux pour mesurer un tronçon
 WIDTH = 1.4  # l'ellipse est plus large que haute (comme le dessin)
 
 
@@ -68,6 +69,14 @@ class Circuit:
     def get_shortest_path_length(self) -> int:
         """Longueur du plus court tour, en segments."""
         return sum(frame.get_shortest_path_length() for frame in self.frames)
+
+    def get_length(self, a: Node, b: Node) -> float:
+        """Longueur du tronçon a -> b À L'ÉCRAN : l'extérieur de l'arc est plus long que
+        l'intérieur. Mesurée sur LENGTH_STEPS petits morceaux (même unité qu'une case)."""
+        points = [self.to_screen(a.frame, a.x + (b.x - a.x) * i / LENGTH_STEPS,
+                                 a.y + (b.y - a.y) * i / LENGTH_STEPS)
+                  for i in range(LENGTH_STEPS + 1)]
+        return sum(math.dist(p, q) for p, q in zip(points, points[1:]))
 
     def get_bounds(self) -> tuple[float, float, float, float]:
         """(xmin, xmax, ymin, ymax) de l'écran."""

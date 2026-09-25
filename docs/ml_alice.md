@@ -122,52 +122,71 @@ q = q + 0.1 × (récompense + 0.9 × meilleur q de la situation suivante − q)
 ```
 **Exploration** : au début Alice choisit au hasard (epsilon = 1), puis de moins en moins (epsilon → 0,05). Sans exploration, elle ne découvrirait jamais les bonnes actions.
 
-800 épisodes (~20 s). Seule Alice apprend, les 9 autres roulent à la Règle. Table → `q_alice.json` (lisible).
+3000 épisodes (~2 min). Seule Alice apprend, les 9 autres roulent à la Règle. Table → `q_alice.json` (lisible).
 
 ---
 
-## 6. La comparaison (30 circuits jamais vus)
+## 6. Les distances : un tronçon long prend plus de temps (Alice seule)
+
+**Problème observé** : Alice choisissait presque toujours « rapide ». Normal : elle ne voyait pas la route. Tous les tronçons duraient pareil, qu'ils soient courts ou longs.
+
+**Correction** (seulement pour Alice, les autres gardent les mêmes règles) :
+- Vitesse de base générale, identique pour tous.
+- Temps sur un tronçon = longueur / vitesse. Dans le code : `progress += speed × dt / length`.
+- Longueur = longueur **réelle à l'écran** (`Circuit.get_length`) : l'extérieur de l'arc est plus long que l'intérieur, une diagonale plus longue qu'un tout droit. Entre 0,9 et 2,0 cases.
+- Alice **voit** la longueur de chaque sortie : 3 features de plus (`long_descendre`, `long_tout_droit`, `long_monter`), valeurs 0 pas de sortie · 1 court (< 1,15) · 2 moyen (< 1,45) · 3 long.
+  - RL : `AliceAgent` (état de 8 nombres au lieu de 5).
+  - Arbre : 10 features au lieu de 7.
+
+**Observabilité** : chaque voiture compte ses allures (`pace_counts`) et sa distance.
+- À l'écran : sous le classement, l'allure actuelle d'Alice, la longueur du tronçon et la répartition lent / normal / rapide.
+- Dans le terminal : `alice.py` affiche la répartition des allures pour chaque conduite.
+
+## 7. La comparaison (30 circuits jamais vus)
 
 ![Comparaison](images/alice.png)
 
-| Conduite d'Alice | Collisions d'Alice / min | Tours / 60 s | Collisions des autres / min |
-|---|---:|---:|---:|
-| Hasard | 10,67 | 1,43 | 3,61 |
-| Règle | 2,13 | 1,97 | 2,70 |
-| Arbre (supervisé) | 4,70 | **3,07** | 2,97 |
-| RL (Q-learning) | **1,70** | 2,07 | **2,64** |
+| Conduite d'Alice | Collisions d'Alice / min | Tours / 60 s | Collisions des autres / min | Allures lent / normal / rapide |
+|---|---:|---:|---:|---|
+| Hasard | 9,23 | 1,03 | 3,47 | 31 % / 34 % / 35 % |
+| Règle | 6,57 | 1,20 | 3,14 | 0 % / 100 % / 0 % |
+| Arbre (supervisé) | **2,53** | **2,27** | **2,73** | 0 % / 0 % / 100 % |
+| RL (Q-learning, 3000 épisodes) | 2,77 | 1,97 | 2,76 | 2 % / 7 % / 91 % |
 
 ### Lecture
-- **Le ML marche** : Arbre et RL font bien mieux que le Hasard (10,67 → 4,70 et 1,70).
-- **RL = le plus sûr** : −20 % de collisions par rapport à la Règle, un peu plus de tours, et Alice gêne moins les autres.
-- **Arbre = le plus rapide mais pas le plus sûr** : 3 tours au lieu de 2, mais 2× plus de collisions que la Règle.
+- **Le ML marche** : Arbre et RL ont environ 3× moins de collisions que la Règle et 3,5× moins que le Hasard.
+- **Pourquoi la Règle fait moins bien qu'avant (6,57 au lieu de 2,13)** : Alice ralentit maintenant sur les longs tronçons, pas les autres. Avec la Règle, elle roule à allure normale et se fait **rattraper par derrière**. Les modèles l'ont compris : rouler vite = ne pas se faire percuter.
+- **« Rapide » reste le choix principal, et c'est logique.** Dans ce monde, rouler vite ne coûte rien : pas de carburant, pas de risque de sortie de route. Et rester lente fait rattraper Alice. Le RL, lui, varie un peu (9 % lent ou normal) selon la situation.
+- **L'observabilité a servi** : sans le compteur d'allures, on n'aurait pas vu que l'arbre roule à 100 % en rapide.
 
-### ⚠️ Piège n°2 : pourquoi l'arbre fait moins bien que le RL ?
-1. **Il ne voit que l'instant présent.** Il prédit « collision sur CE segment ? ». Le RL, avec GAMMA, compte aussi ce qui arrive après.
-2. **Il a appris dans un autre monde** (*distribution shift*) : les données viennent de voitures **toutes au hasard**, mais Alice roule au milieu de voitures **à la Règle**. Les situations ne sont pas les mêmes.
-3. **Le malus de lenteur** pousse l'arbre à rouler vite → plus de tours, plus de risques.
-
-Pistes (exercices) : collecter avec les autres à la Règle ; ajouter une feature ; changer `SLOW_PENALTY` ; changer `max_depth` et regarder précision entraînement vs test.
+### ⚠️ Piège n°2 : un modèle optimise ce qu'on lui demande, pas ce qu'on imagine
+Si « rapide » gagne toujours, ce n'est pas un bug du modèle, c'est la règle du jeu. Pour qu'Alice module sa vitesse, il faut que **rouler vite coûte quelque chose**. Pistes (exercices) :
+- malus de vitesse dans la récompense (ex. −0,05 par tronçon en rapide = carburant) ;
+- rapide plus dangereux : distance de contact (`MIN_GAP`) plus grande quand on roule vite ;
+- limitation de vitesse sur les tronçons longs ou courbes.
 
 ### ⚠️ Piège n°3 : toujours comparer à conditions égales
-Mêmes 30 circuits (seeds 0-29), jamais utilisés pour apprendre (entraînement sur seeds ≥ 10 000), même trafic autour d'Alice. Sinon la différence pourrait venir du hasard, pas du modèle.
+Mêmes 30 circuits (seeds 0-29), jamais utilisés pour apprendre (entraînement sur seeds ≥ 10 000), même trafic autour d'Alice, et Alice roule aux vraies distances **dans toutes les conduites**. Sinon la différence pourrait venir du hasard, pas du modèle.
 
----
+### Pourquoi l'arbre ne voit que l'instant présent
+Il prédit « collision sur CE tronçon ? ». Le RL, avec GAMMA, compte aussi la suite. Ici l'arbre gagne de peu, parce que « rouler vite » est une bonne réponse à court terme comme à long terme.
 
-## 7. Qui fait quoi dans le code
+## 8. Qui fait quoi dans le code
 
 | Fichier | Rôle |
 |---|---|
-| `traffic.py` | `Traffic(..., special={0: conduite})` : Alice a sa conduite, `policy_of(v)` choisit la bonne |
+| `traffic.py` | `Traffic(..., special={0: conduite})` : Alice a sa conduite (`policy_of`) et roule aux vraies distances (`distance_aware`, `get_length`). Compte les allures (`pace_counts`) |
+| `circuit.py` / `network.py` | `get_length(a, b)` : longueur réelle d'un tronçon |
 | `learning.py` | `get_state` (features), `QAgent` (RL), inchangés |
 | `tree_model.py` | collecte (`RecorderPolicy`), entraînement (`train`), conduite (`TreePolicy`) |
-| `alice.py` | RL d'Alice (`train_alice`), comparaison (`measure`), graphique |
+| `alice.py` | `AliceAgent` (voit les longueurs), RL d'Alice (`train_alice`), comparaison (`measure`), graphique |
 | `display.py` / `main.py` | `ALICE = "rl"/"tree"/None`, Alice en contour noir, `Alice*` dans le classement |
 | `test_alice.py` | 8 tests : conduite spéciale, exemples bien formés, arbre > hasard, RL apprend, mesure reproductible |
 
-## 8. Questions d'oral probables
+## 9. Questions d'oral probables
 - *Différence supervisé / renforcement ?* → corrigés vs essais-récompenses (tableau §2).
-- *Pourquoi une seule voiture ?* → pour isoler l'effet de la conduite (§6, piège 3).
+- *Pourquoi une seule voiture ?* → pour isoler l'effet de la conduite (§7, piège 3).
 - *Pourquoi l'arbre a 75 % et le modèle bête 86 % ?* → classe rare, regarder le rappel (§4, piège 1).
-- *Pourquoi le RL gagne ?* → il pense au futur (GAMMA) et apprend dans le vrai trafic (§6, piège 2).
+- *Pourquoi Alice roule surtout vite ?* → rouler vite ne coûte rien et évite de se faire rattraper. Le modèle optimise la règle du jeu (§7, piège 2).
+- *Pourquoi ajouter la longueur dans l'état ?* → si le temps dépend de la longueur, Alice doit la voir pour décider (observabilité).
 - *Surapprentissage ?* → précision entraînement ≈ test, profondeur limitée à 4.
