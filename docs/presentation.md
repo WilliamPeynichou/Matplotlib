@@ -17,7 +17,8 @@ Règle : chaque membre présente **la partie qu'il a codée** (A = données, B =
 | 6 | Algorithme | B | 2 min | 4 étapes : grille → chemin principal → branches → types automatiques. Même fonction `find_path` pour tout | 4 captures, une par étape |
 | 7 | Seed | B | 40 s | même seed = même réseau → bug reproductible | 2 captures identiques |
 | 8 | Affichage et animation | C | 1 min | couleurs par type, bouton Randomize, segments animés | capture + GIF |
-| 8b | Comment on sait que ça marche | A | 1 min | `./run_checks.sh` en direct : ruff OK, 68 tests pytest, check.py OK. Exemple : test « toutes les routes vont au END » | capture du terminal vert |
+| 8b | Comment on sait que ça marche | A | 1 min | `./run_checks.sh` en direct : ruff OK, 137 tests pytest, check.py OK. Exemple : test « toutes les routes vont au END » | capture du terminal vert |
+| 8c | Des véhicules qui apprennent | Yusuf | 1 min 30 | Q-learning en une phrase : « à chaque node, le véhicule note ce que son choix lui a rapporté (−10 collision, +1 arrivée, −0,1 par seconde) et la fois suivante choisit ce qui rapporte le plus ». État (5 cases) → action (sortie × allure) → table. Résultat : 35,4 → 9,8 collisions/min, trajets plus courts, sur 20 réseaux jamais vus | `apprentissage.png` + `comparaison.png` |
 | 9 | Difficultés | B + C | 1 min | 1 ou 2 vrais bugs : symptôme → cause → correction. Ex. : branches en cul-de-sac (→ viser le END), grille 1 colonne qui plantait (→ test + message clair), animation à 98 % CPU (→ blitting) | capture du bug |
 | 10 | Démo live | C | 2 min | voir script ci-dessous | — |
 | 11 | Bilan | tous | 30 s | ce qui marche, ce qu'on ajouterait avec plus de temps | — |
@@ -28,6 +29,7 @@ Règle : chaque membre présente **la partie qu'il a codée** (A = données, B =
 3. Cliquer 3 fois sur Randomize : réseaux différents.
 4. Relancer avec la seed de secours : même réseau qu'annoncé.
 5. Montrer un bonus s'il existe (plus court chemin surligné).
+6. Curseur Véhicules à 12, conduite **Règle** ~15 s : lire le compteur de collisions. Même réseau, cliquer **Appris** ~15 s : le compteur monte beaucoup moins vite. Option : `python evaluate.py` (1 s) pour le tableau.
 
 Plan B si l'ordinateur plante : vidéo de la démo enregistrée à l'avance.
 
@@ -43,12 +45,17 @@ Plan B si l'ordinateur plante : vidéo de la démo enregistrée à l'avance.
 - Pourquoi le blitting ? (redessin complet = 78 ms, trop lent pour 20 images/s)
 - Comment marche l'animation ?
 - Ouvre `create_segment()` et explique-la ligne par ligne.
+- Apprentissage : qu'est-ce qu'un état, une action, une récompense ? Ouvre `q_table.json` et lis une ligne (ex. `"0,0,1,0,1"` : seule sortie en haut, libre, quelqu'un suit → « rapide » a la meilleure valeur).
+- Pourquoi −0,1 par seconde de route ? (sinon rouler toujours lentement serait gratuit)
+- Pourquoi 20 réseaux de test jamais vus à l'entraînement ? (mesurer ce qui est appris, pas ce qui est retenu par cœur)
+- Que se passe-t-il si `q_table.json` est supprimé ? (retour à la règle + message, pas de crash)
+- Pourquoi pas un réseau de neurones ? (256 états : une table suffit et chaque valeur se lit)
 
 Les réponses sont dans le tableau « Choix et justifications » de [architecture.md](architecture.md).
 
 ## Checklist avant l'oral
 - [ ] Slides exportées (livrable ; PDF conseillé, le cours dit juste « exporté »)
-- [ ] Archive ZIP testée sur un autre PC
+- [ ] Archive ZIP testée sur un autre PC (avec `q_table.json`, sinon « Appris » retombe sur la règle)
 - [ ] Seed de secours notée
 - [ ] Vidéo de secours
 - [ ] Répétition chronométrée faite au moins une fois

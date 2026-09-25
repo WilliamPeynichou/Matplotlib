@@ -20,6 +20,19 @@ Qui fait quoi : [planning.md](planning.md). Signatures : [contrat](architecture.
 | 4 | 11 | Visu enrichie + routes courbes (bonus) | display.py |
 | 4 | 12 | Plus court chemin (bonus) | network.py |
 | 4 | 13 | Documentation (bonus) | README.md + docstrings |
+| 5 | 14 | Choisir routes et intersections | generator.py, display.py |
+| 5 | 15 | Véhicules et règle des 2 secondes | traffic.py, display.py |
+| 5 | 16 | Tester trafic et génération | check.py |
+| 6 | 17 | Vitesse propre à chaque véhicule | traffic.py |
+| 6 | 18 | Détection des collisions | traffic.py |
+| 6 | 19 | Conduites interchangeables | policies.py, traffic.py |
+| 6 | 20 | Collisions visibles à l'écran | display.py |
+| 6 | 21 | Ce que « voit » un véhicule (état) | learning.py |
+| 6 | 22 | Agent Q-learning | learning.py |
+| 6 | 23 | Entraînement sans fenêtre | train.py |
+| 6 | 24 | Comparer hasard / règle / appris | evaluate.py |
+| 6 | 25 | Choisir la conduite dans la fenêtre | display.py, main.py |
+| 6 | 26 | QA + documentation de l'apprentissage | check.py, tests, docs |
 
 Chaque feature ci-dessous : **But** · **À faire** · **Terminé quand** · **Pièges** · **À expliquer à l'oral**.
 
@@ -250,6 +263,67 @@ Chaque feature ci-dessous : **But** · **À faire** · **Terminé quand** · **P
 
 ### F16 – Tester trafic et génération (`check.py`)
 Générer plusieurs réseaux et seeds ; vérifier START/END, grille, doublons, croisements, types, chemin BFS. Simuler des véhicules à pas fixe et contrôler les décisions dans la fenêtre de 2 secondes. Terminé quand `python check.py` affiche `OK`.
+
+---
+
+## Round 6 – Apprentissage (ML)
+
+Les véhicules apprennent par Q-learning à choisir sortie et allure pour ne pas se heurter. Tickets détaillés, choix et mesures : [ml_archi/tickets.md](../ml_archi/tickets.md) (F17 = ML-1 … F26 = ML-10).
+
+### F17 – Vitesse propre à chaque véhicule (`traffic.py`)
+**But** : que les rapides rattrapent les lents ; sinon aucune collision possible, rien à apprendre.
+**À faire** : `base_speed` tirée entre 0,7 et 1,3 × `SPEED`, avec un hasard séparé (les choix de sortie d'une seed ne changent pas).
+**Terminé quand** : même seed = mêmes vitesses ; un véhicule avance de `speed × dt`.
+**À expliquer à l'oral** : pourquoi un deuxième `random.Random` pour les vitesses.
+
+### F18 – Détection des collisions (`traffic.py`)
+**But** : compter les collisions, sans bloquer les véhicules (ils se traversent).
+**À faire** : contact si deux véhicules sont à moins de `MIN_GAP` (0,15 segment) sur le même segment ou autour du même node, ou s'ils ont échangé leur ordre sur un segment entre deux images. Une collision = un **nouveau** contact. START et END exclus.
+**Terminé quand** : tests rattrapage, fusion, dépassement entre deux images, contact qui dure = 1.
+**Pièges** : compter chaque image au lieu de chaque contact ; comparer toutes les paires (lent) au lieu de ranger par segment et par node.
+
+### F19 – Conduites interchangeables (`policies.py`, `traffic.py`)
+**But** : pouvoir brancher n'importe quelle façon de conduire.
+**À faire** : `choose(traffic, vehicle, node, exits) -> (sortie, allure)`. `RulePolicy` (la règle de F15, déplacée telle quelle) et `RandomPolicy`. Allures : `slow` ×0,5, `normal` ×1, `fast` ×1,5.
+**Terminé quand** : la règle se comporte exactement comme avant (empreinte identique sur 20 réseaux).
+
+### F20 – Collisions visibles à l'écran (`display.py`)
+**But** : voir les collisions pendant la démo.
+**À faire** : croix rouge qui s'efface en 0,6 s, compteur dans la ligne d'info, entrée « Collision » dans la légende. Artiste `animated=True` (blitting).
+**Terminé quand** : croix visibles en mode hasard, fluidité inchangée.
+
+### F21 – Ce que « voit » un véhicule (`learning.py`)
+**But** : résumer la situation en un petit état pour la table.
+**À faire** : `get_state()` → `(descendre, tout droit, monter, rapide, derrière)` ; chaque direction : pas de sortie, libre, occupée, danger. 256 états.
+**Terminé quand** : tests sur situations construites à la main ; l'état annonce bien les collisions (sortie libre 13 %, danger 56 %).
+**À expliquer à l'oral** : pourquoi la case « derrière » (sans elle, l'agent ne sait pas que freiner le fera percuter).
+
+### F22 – Agent Q-learning (`learning.py`)
+**But** : apprendre quelle action rapporte le plus dans chaque état.
+**À faire** : table `q[état][action]`, choix ε-greedy, mise à jour `q += 0,1 × (r + 0,9 × max q' − q)`. Récompenses : collision −10, arrivée +1, −0,1 par seconde. `save()` / `load()` en JSON.
+**Terminé quand** : une mise à jour calculée à la main donne le bon nombre ; sauvegarde puis lecture = même table.
+**À expliquer à l'oral** : la formule, ligne par ligne ; pourquoi −0,1 par seconde.
+
+### F23 – Entraînement sans fenêtre (`train.py`)
+**But** : produire `q_table.json` et la courbe d'apprentissage.
+**À faire** : 3000 épisodes de 60 s sur des réseaux au hasard (seeds ≥ 10 000) ; ε de 1 à 0,05.
+**Terminé quand** : < 2 min (~30 s), courbe descendante, table identique à chaque lancement.
+
+### F24 – Comparer hasard / règle / appris (`evaluate.py`)
+**But** : prouver que l'apprentissage sert à quelque chose.
+**À faire** : les 3 conduites sur les mêmes 20 réseaux de test (seeds 0 à 19) ; collisions/min, trajet moyen, arrivées/min ; graphique en barres.
+**Terminé quand** : l'appris bat le hasard (et ici aussi la règle : 9,8 contre 35,4 collisions/min).
+**À expliquer à l'oral** : pourquoi les réseaux de test ne servent jamais à l'entraînement.
+
+### F25 – Choisir la conduite dans la fenêtre (`display.py`, `main.py`)
+**But** : montrer la différence en direct.
+**À faire** : boutons « Hasard / Règle / Appris » ; `DRIVING` dans `main.py`. Table absente ou abîmée → règle + message, jamais de crash.
+**Terminé quand** : les 3 modes s'affichent ; tests fichier absent et 7 fichiers abîmés.
+
+### F26 – QA + documentation de l'apprentissage (`check.py`, tests, docs)
+**But** : que tout reste vérifié et explicable.
+**À faire** : `check.py` fait rouler les 3 conduites sur les 120 réseaux (collisions bien comptées, trajets positifs, véhicules sur les routes) ; `test_learning.py` ; README, architecture, présentation.
+**Terminé quand** : `./run_checks.sh` passe ; chacun sait expliquer F21 et F22 à l'oral.
 
 ---
 

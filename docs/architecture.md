@@ -1,6 +1,6 @@
 # Architecture
 
-Objectif : **simple à coder, simple à expliquer**. 5 fichiers, 4 classes, rien de plus.
+Objectif : **simple à coder, simple à expliquer**. Le socle : 5 fichiers, 4 classes, rien de plus. La circulation (`traffic.py`, `policies.py`) et l'apprentissage (`learning.py`, `train.py`, `evaluate.py`) s'ajoutent à côté, sans modifier le socle.
 
 ## Arborescence
 
@@ -12,7 +12,11 @@ python_b3/
 ├── network.py     # RoadNetwork               (la grille + les liens)
 ├── generator.py   # generate_network()        (le hasard)
 ├── display.py     # draw_network(), bouton    (le dessin)
-├── traffic.py     # circulation et décisions aux intersections
+├── traffic.py     # circulation, vitesses, collisions
+├── policies.py    # conduites : règle de divergence, hasard
+├── learning.py    # apprentissage : ce que voit un véhicule, agent Q-learning
+├── train.py       # entraînement sans fenêtre -> q_table.json + courbe
+├── evaluate.py    # compare hasard / règle / appris -> tableau + barres
 └── check.py       # tests génération + trafic
 ```
 
@@ -21,21 +25,36 @@ Phrase pour l'oral : *« models = les briques, network = le plateau, generator =
 ## Qui importe qui
 
 ```
-main ──► network, generator, display
+main ──► network, generator, display, learning
 generator ──► network, models
-display ──► network, models, traffic
+display ──► network, models, traffic, learning
 network ──► models
-traffic ──► network, models
+traffic ──► network, models, policies
+policies ──► models
+learning ──► traffic, policies, models
+train ──► learning, traffic, policies, generator, network
+evaluate ──► train, learning, policies
 ```
 Une seule règle : `generator` ne dessine pas, `display` ne tire pas au hasard.
 
-## Circulation – `traffic.py`
+## Circulation – `traffic.py` et `policies.py`
 
-`Traffic` gère le temps, les véhicules et l’historique des sorties empruntées à chaque node. `Vehicle` garde son node courant, sa prochaine destination et sa progression sur le segment. À une intersection, `choose_exit()` écarte les sorties utilisées dans les 2 dernières secondes si une autre est disponible.
+`Traffic` gère l’horloge, les véhicules et les collisions. Chaque `Vehicle` garde sa position courante, sa prochaine destination, sa progression sur le segment et sa vitesse propre. Deux véhicules à moins de `MIN_GAP` l’un de l’autre (même segment, ou autour du même node) sont en contact : chaque nouveau contact compte une collision.
 
-## Circulation (`traffic.py`)
+À chaque node, `Traffic` demande à sa **conduite** (`policies.py`) la sortie et l’allure : `choose(traffic, vehicle, node, exits) -> (sortie, allure)`. La vitesse du segment vaut vitesse propre × allure (`slow` 0,5, `normal` 1, `fast` 1,5).
 
-`Traffic` gère l’horloge, les véhicules et l’historique des sorties prises par node. Chaque `Vehicle` garde sa position courante, sa prochaine destination et sa progression sur un segment. Quand un véhicule arrive à une intersection, `choose_exit()` cherche les sorties choisies à ce node dans les 2 dernières secondes et essaie d’en prendre une autre.
+- `RulePolicy` (par défaut) : la règle de divergence. `choose_exit()` cherche les sorties choisies à ce node dans les 2 dernières secondes et essaie d’en prendre une autre ; allure normale.
+- `RandomPolicy` : sortie et allure au hasard, point de comparaison pour l’apprentissage (voir [ml_archi/tickets.md](../ml_archi/tickets.md)).
+
+## Apprentissage – `learning.py`
+
+`get_state()` résume ce que voit un véhicule arrêté sur un node en un petit tuple `(descendre, tout droit, monter, rapide, derrière)`. Chaque direction vaut : pas de sortie, libre, véhicule devant loin, ou danger (véhicule devant proche, ou arrivée en même temps qu’un autre au même node). `rapide` compare sa vitesse propre à la moyenne, `derrière` signale un véhicule qui le suit de près. 256 états possibles : c’est la clé de la table de Q-learning.
+
+`QAgent` est une conduite (`Policy`) qui apprend. Sa table `q[état][action]` estime ce que rapporte chacune des 9 actions (3 directions × 3 allures). Chaque véhicule garde sa dernière décision ; à la suivante (ou à l’arrivée au END), la table est corrigée avec la récompense reçue entre-temps : −10 par collision, +1 à l’arrivée, −0,1 par seconde de route. `Traffic` prévient la conduite par `on_collision()` et `on_arrival()`. Tous les véhicules partagent la même table. `save()` / `load()` l’écrivent en JSON ; un agent chargé prend toujours la meilleure action et n’apprend plus.
+
+`train.py` entraîne l’agent sans fenêtre : 3000 épisodes de 60 s simulées, chacun sur un réseau et un nombre de véhicules tirés au hasard. L’exploration `epsilon` descend de 1 (tout au hasard) à 0,05. Il écrit `q_table.json` et la courbe `docs/images/apprentissage.png`, où les niveaux du hasard et de la règle servent de repère.
+
+`evaluate.py` fait rouler les trois conduites sur les 20 mêmes réseaux de test (seeds 0 à 19, jamais utilisées à l’entraînement) et compare collisions par minute, durée moyenne d’un trajet (`Traffic.trip_times`) et arrivées par minute. Il écrit `docs/images/comparaison.png`.
 
 ## Les classes
 
@@ -151,9 +170,18 @@ Même fonction pour le chemin principal et les branches = moins de code, moins �
 | Courbes = Bézier à tangentes horizontales | chaque segment va de x à x+1 → routes lisses sans calcul global | lissage de tout le chemin |
 | Décalage organique seulement à l'écran (`get_position`) | les règles (grille, pas de X) restent simples et testées ; `JITTER < 0.5` garde l'ordre des nodes → aucun croisement visuel. Décalage tiré de `seed + case` → reproductible | déplacer les nodes dans le modèle (règles et tests à refaire) |
 | Constantes en haut du fichier qui les utilise | pas de fichier en plus, facile à trouver | `config.py` séparé |
+| Collision = événement compté, pas un blocage | les véhicules se traversent : on compte, on affiche, on punit. S'ils se bloquaient, aucune collision ne serait possible → rien à apprendre | véhicules qui s'arrêtent derrière les autres |
+| Conduite = objet avec `choose()` | la règle, le hasard et l'agent se branchent au même endroit ; comparer = changer un argument | `if mode == ...` dans `traffic.py` |
+| Q-learning **en table** | 256 états × 9 actions : une table suffit, chaque valeur se lit dans `q_table.json`, la formule tient en une ligne et s'explique à l'oral | réseau de neurones (PyTorch, stable-baselines3) : lourd, dépendances, impossible à expliquer ligne par ligne |
+| État petit et fait main | 5 cases qu'on peut nommer ; l'agent apprend vite (30 s) | positions brutes de tous les véhicules : trop d'états, jamais vus deux fois |
+| Une table partagée par tous les véhicules | ce que l'un apprend sert aux autres ; un seul fichier | une table par véhicule (chacun n'apprendrait que de ses propres trajets) |
+| −0,1 par seconde de route | sans coût du temps, « toujours lent » serait gratuit | seulement collision et arrivée |
+| Réseaux de test (seeds 0–19) jamais utilisés à l'entraînement (≥ 10 000) | mesurer ce que l'agent a appris, pas ce qu'il a retenu par cœur | évaluer sur les réseaux d'entraînement |
+| Table absente ou abîmée → règle + message | la démo ne plante jamais (malus −3 si crash au lancement) | laisser l'erreur remonter |
 
 ## Ce qu'on ne fait pas
 - Pas de bibliothèque de graphe (networkx) : on doit concevoir nous-mêmes.
+- Pas de bibliothèque de ML (PyTorch, scikit-learn) : le Q-learning en table tient dans `learning.py` et s'explique ligne par ligne.
 - Pas d'héritage (`StartNode`...) : le type change pendant la génération, un attribut suffit.
 - Pas de diagonales croisées, pas d'algo compliqué avant que le socle marche.
 - Les routes courbes (visibles sur l'exemple du cours) viennent **après** le socle, dans `display.py` uniquement (feature 11).

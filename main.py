@@ -4,6 +4,7 @@ import random
 
 from display import show
 from generator import generate_network
+from learning import DRIVINGS
 from network import RoadNetwork
 
 COLUMNS = 15
@@ -13,6 +14,7 @@ MAX_SEED = 99999
 ROADS = 4  # chemin principal + branches
 INTERSECTIONS = 4  # nombre visé (le plus proche possible)
 VEHICLES = 6
+DRIVING = "rule"  # conduite au démarrage : "random", "rule" ou "learned" (lancer train.py avant)
 
 
 def create_seed() -> int:
@@ -29,7 +31,13 @@ def main() -> None:
     except ValueError as error:
         print(f"Erreur : {error}. Corrige COLUMNS / ROWS dans main.py.")
         return
-    settings = {"roads": ROADS, "intersections": INTERSECTIONS, "vehicles": VEHICLES}
+    driving = DRIVING
+    if driving not in DRIVINGS:
+        print(f"Conduite inconnue {driving!r} : choisir parmi {', '.join(DRIVINGS)}. "
+              "Conduite Règle utilisée.")
+        driving = "rule"
+    settings = {"roads": ROADS, "intersections": INTERSECTIONS, "vehicles": VEHICLES,
+                "driving": driving}
 
     def generate(seed: int, roads: int, intersections: int) -> int:
         """Génère le réseau et renvoie le nombre d'intersections obtenu."""

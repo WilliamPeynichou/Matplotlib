@@ -1,14 +1,18 @@
-"""L'écran : dessin, animation, curseurs et véhicules (features 4, 6, 9, 11, 14, 15)."""
+"""L'écran : dessin, animation, curseurs et véhicules (features 4, 6, 9, 11, 14, 15).
+Les collisions apparaissent en croix rouges qui s'effacent (ML-4).
+Des boutons choisissent la conduite : hasard, règle ou apprise (ML-9)."""
 
 import random
 import time
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgba
 from matplotlib.lines import Line2D
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path
-from matplotlib.widgets import Button, Slider
+from matplotlib.widgets import Button, RadioButtons, Slider
 
+from learning import DRIVINGS, make_policy
 from models import Node, NodeType, Segment
 from network import RoadNetwork
 from traffic import Traffic
@@ -41,6 +45,9 @@ PATH_WIDTH = 6
 VEHICLE_COLORS = ["#8E44AD", "#E67E22", "#16A085", "#C0392B", "#2980B9", "#D35400",
                   "#27AE60", "#7F8C8D", "#F1C40F", "#E84393"]
 VEHICLE_SIZE = 70
+CRASH_COLOR = "#FF1744"
+CRASH_SIZE = 220
+CRASH_DURATION = 0.6  # secondes : la croix de collision s'efface pendant ce temps
 CURVED_ROADS = True  # False = segments droits
 JITTER = 0.3  # décalage max à l'écran ; < 0.5 garde l'ordre des nodes (aucun croisement)
 layout = {"seed": 0}  # seed du décalage, changée à chaque réseau
@@ -121,6 +128,8 @@ def draw_legend(ax) -> None:
     ]
     handles.append(Line2D([], [], color=PATH_COLOR, linewidth=PATH_WIDTH,
                           label="Plus court chemin"))
+    handles.append(Line2D([], [], marker="x", linestyle="", color=CRASH_COLOR,
+                          markersize=9, markeredgewidth=2.5, label="Collision"))
     ax.legend(handles=handles, loc="center left", bbox_to_anchor=(1.01, 0.5), frameon=False)
 
 
@@ -169,13 +178,25 @@ def get_vehicle_positions(traffic: Traffic) -> list[tuple[float, float]]:
     return positions
 
 
+def get_recent_crashes(traffic: Traffic) -> list[tuple[float, float, float]]:
+    """Collisions de moins de CRASH_DURATION secondes : (x, y, opacité de 1 à 0)."""
+    crashes = []
+    for moment, _a, _b, (current, target, progress) in reversed(traffic.collision_events):
+        age = traffic.time - moment
+        if age > CRASH_DURATION:
+            break  # les événements sont dans l'ordre : tous les suivants sont plus vieux
+        x, y = get_point_on_segment(current, target, progress)
+        crashes.append((x, y, 1 - age / CRASH_DURATION))
+    return crashes
+
+
 class NetworkView:
     """La fenêtre : construit le réseau en animation, puis fait rouler les véhicules."""
 
     def __init__(self, network: RoadNetwork, seed: int, settings: dict, generate, new_seed):
         self.network = network
         self.seed = seed
-        self.settings = settings  # {"roads": int, "intersections": int, "vehicles": int}
+        self.settings = settings  # {"roads", "intersections", "vehicles" : int, "driving" : str}
         self.generate = generate  # generate(seed, roads, intersections) -> intersections
         self.new_seed = new_seed  # new_seed() -> int
         self.animation = None
@@ -184,13 +205,15 @@ class NetworkView:
         self.fig.subplots_adjust(right=0.8, bottom=0.28)
         self.info = self.fig.text(0.5, 0.25, "", ha="center", color="#555555", animated=True)
         self.vehicle_artist = None
+        self.crash_artist = None
+        self.notice = ""  # message si la conduite demandée n'a pas pu être chargée
         self.background = None  # image du réseau sans véhicules (blitting)
         self.fig.canvas.mpl_connect("draw_event", self.on_draw)
         self.create_controls()
         self.regenerate()
 
     def create_controls(self) -> None:
-        """Curseurs (routes, intersections, véhicules) et bouton Randomize."""
+        """Curseurs (routes, intersections, véhicules), bouton Randomize, choix de la conduite."""
         self.roads_slider = Slider(self.fig.add_axes([0.25, 0.17, 0.45, 0.03]), "Routes",
                                    1, MAX_ROADS, valinit=self.settings["roads"], valstep=1)
         self.intersections_slider = Slider(
@@ -204,6 +227,22 @@ class NetworkView:
         self.intersections_slider.on_changed(self.on_network_change)
         self.vehicles_slider.on_changed(self.on_vehicles_change)
         self.button.on_clicked(self.on_randomize)
+        driving_ax = self.fig.add_axes([0.81, 0.03, 0.17, 0.17], frame_on=False)
+        driving_ax.set_title("Conduite", fontsize=10, loc="left")
+        self.driving_radio = RadioButtons(driving_ax, list(DRIVINGS.values()),
+                                          active=list(DRIVINGS).index(self.settings["driving"]))
+        self.driving_radio.on_clicked(self.on_driving_change)
+
+    def on_driving_change(self, label: str) -> None:
+        """Boutons de conduite : même réseau, on relance la circulation avec la nouvelle."""
+        self.settings["driving"] = next(name for name, text in DRIVINGS.items() if text == label)
+        self.start_traffic()
+
+    def select_driving(self, driving: str) -> None:
+        """Coche un bouton de conduite sans déclencher on_driving_change."""
+        self.driving_radio.eventson = False
+        self.driving_radio.set_active(list(DRIVINGS).index(driving))
+        self.driving_radio.eventson = True
 
     def on_network_change(self, value) -> None:
         """Curseur routes ou intersections : même seed, nouveau réseau."""
@@ -251,10 +290,18 @@ class NetworkView:
         if not build:
             draw_network(self.ax, self.network)
             self.built = len(self.network.segments)
-        self.traffic = Traffic(self.network, self.settings["vehicles"], self.seed)
-        colors = [VEHICLE_COLORS[i % len(VEHICLE_COLORS)] for i in range(self.settings["vehicles"])]
+        policy, driving = make_policy(self.settings["driving"])
+        self.notice = ""
+        if driving != self.settings["driving"]:  # table apprise absente ou abîmée
+            self.notice = "Table apprise absente ou abîmée (lancer train.py) : conduite Règle."
+            self.settings["driving"] = driving
+            self.select_driving(driving)
+        self.traffic = Traffic(self.network, self.settings["vehicles"], self.seed, policy)
+        colors =[VEHICLE_COLORS[i % len(VEHICLE_COLORS)] for i in range(self.settings["vehicles"])]
         self.vehicle_artist = self.ax.scatter([], [], s=VEHICLE_SIZE, zorder=4, animated=True,
                                               edgecolors="white", linewidths=1.5)
+        self.crash_artist = self.ax.scatter([], [], s=CRASH_SIZE, marker="x", linewidths=3,
+                                            color=CRASH_COLOR, zorder=5, animated=True)
         self.vehicle_colors = colors
         self.last_time = time.perf_counter()
         self.info.set_text("")
@@ -271,9 +318,10 @@ class NetworkView:
         self.draw_moving_parts()
 
     def draw_moving_parts(self) -> None:
-        """Dessine seulement ce qui bouge (véhicules + compteur)."""
+        """Dessine seulement ce qui bouge (véhicules, collisions, compteur)."""
         if self.vehicle_artist is not None:
             self.ax.draw_artist(self.vehicle_artist)
+            self.ax.draw_artist(self.crash_artist)
         self.fig.draw_artist(self.info)
 
     def update_frame(self, frame: int) -> None:
@@ -297,16 +345,24 @@ class NetworkView:
         self.fig.canvas.blit(self.fig.bbox)
 
     def update_traffic(self, dt: float) -> None:
-        """Avance les véhicules et met à jour leurs points et le compteur."""
+        """Avance les véhicules et met à jour leurs points, les collisions et le compteur."""
         self.traffic.update(dt)
         positions = get_vehicle_positions(self.traffic)
         moving = self.traffic.get_moving()
         self.vehicle_artist.set_offsets(positions if positions else [[float("nan")] * 2])
         if positions:
             self.vehicle_artist.set_facecolors([self.vehicle_colors[v.number] for v in moving])
-        self.info.set_text(f"Véhicules en route : {len(moving)}  ·  "
-                           f"divergences (fenêtre 2 s) : {self.traffic.forced_divergences}  ·  "
-                           f"plus court chemin : {self.path_length} segments")
+        crashes = get_recent_crashes(self.traffic)
+        self.crash_artist.set_offsets([(x, y) for x, y, _ in crashes] or [[float("nan")] * 2])
+        if crashes:
+            self.crash_artist.set_color([to_rgba(CRASH_COLOR, alpha) for _, _, alpha in crashes])
+        driving = self.settings["driving"]
+        info = (f"Conduite : {DRIVINGS[driving]}  ·  véhicules en route : {len(moving)}  ·  "
+                f"collisions : {self.traffic.collisions}")
+        if driving == "rule":  # les divergences n'existent que pour la règle
+            info += f"  ·  divergences (2 s) : {self.traffic.forced_divergences}"
+        info += f"  ·  plus court chemin : {self.path_length} segments"
+        self.info.set_text(info + (f"\n{self.notice}" if self.notice else ""))
 
 
 def show(network: RoadNetwork, seed: int, settings: dict, generate, new_seed) -> None:

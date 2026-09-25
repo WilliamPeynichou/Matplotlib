@@ -1,6 +1,7 @@
-"""Vérifie génération, intersections demandées et divergence des véhicules."""
+"""Vérifie génération, intersections demandées, divergence des véhicules et collisions."""
 
 from generator import generate_network
+from learning import DRIVINGS, make_policy
 from models import NodeType
 from network import RoadNetwork
 from traffic import Traffic
@@ -88,14 +89,36 @@ def check_divergence() -> list[str]:
     return errors
 
 
+def check_collisions(network: RoadNetwork, seed: int) -> list[str]:
+    """Fait rouler 10 véhicules 20 s avec chaque conduite (hasard, règle, appris) et vérifie
+    que la circulation reste cohérente : pas de crash, collisions et trajets bien comptés."""
+    errors = []
+    for driving in DRIVINGS:
+        policy, _used = make_policy(driving)
+        traffic = Traffic(network, count=10, seed=seed, policy=policy)
+        for _ in range(200):
+            traffic.update(0.1)
+        if traffic.collisions != len(traffic.collision_events):
+            errors.append(f"{driving} : compteur de collisions incohérent")
+        if any(duration <= 0 for duration in traffic.trip_times):
+            errors.append(f"{driving} : trajet de durée nulle ou négative")
+        for vehicle in traffic.get_moving():
+            if vehicle.target is not None and not network.has_segment(vehicle.current,
+                                                                      vehicle.target):
+                errors.append(f"{driving} : véhicule {vehicle.number} hors des routes")
+            if not 0 <= vehicle.progress < 1:
+                errors.append(f"{driving} : véhicule {vehicle.number} progress {vehicle.progress}")
+    return errors
+
+
 def main() -> None:
-    """Teste plusieurs tailles, seeds, puis la règle de circulation."""
+    """Teste plusieurs tailles, seeds, la règle de circulation puis les collisions."""
     failures = 0
     for columns, rows in SIZES:
         for seed in range(SEEDS):
             network = RoadNetwork(columns, rows)
             generate_network(network, seed, roads=4, intersections=3)
-            for error in check_network(network):
+            for error in check_network(network) + check_collisions(network, seed):
                 print(f"[{columns}x{rows}] seed {seed}: {error}")
                 failures += 1
     for error in check_divergence():

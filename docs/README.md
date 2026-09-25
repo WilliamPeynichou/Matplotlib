@@ -7,7 +7,8 @@ Générer un réseau routier sur une grille (nodes + segments) et l'afficher ave
 | Document | Contenu |
 |---|---|
 | [architecture.md](architecture.md) | 5 fichiers, 4 classes, algo en 4 étapes, choix justifiés |
-| [features.md](features.md) | F1–F16 : réseau, contrôles et circulation |
+| [features.md](features.md) | F1–F26 : réseau, contrôles, circulation et apprentissage |
+| [../ml_archi/tickets.md](../ml_archi/tickets.md) | apprentissage (ML) : tickets, choix de conception, mesures |
 | [qualite.md](qualite.md) | 8 règles de code, Git, checklist |
 | [planning.md](planning.md) | 3 devs en parallèle, rounds, rôles tournants |
 | [evaluation.md](evaluation.md) | grille de notation → features |

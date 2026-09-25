@@ -1,47 +1,75 @@
 """La circulation : des véhicules qui parcourent les routes (feature 15).
 
-Règle de divergence : à un node qui a plusieurs sorties, si un autre véhicule y est
-passé il y a moins de DIVERGE_WINDOW secondes, on prend une sortie différente de la sienne.
+Chaque véhicule a sa propre vitesse (ML-1) : les rapides rattrapent les lents.
+
+Collisions (ML-2) : les véhicules se traversent, mais chaque nouveau contact est compté.
+
+Conduite (ML-3) : à chaque node, une politique (policies.py) choisit la sortie et l'allure.
+Par défaut, c'est la règle de divergence.
 """
 
 import random
+from itertools import combinations
 
-from models import Node
+from models import Node, NodeType
 from network import RoadNetwork
+from policies import PACES, RulePolicy
 
-SPEED = 1.5  # segments par seconde
+SPEED = 1.5  # vitesse moyenne, en segments par seconde
+MIN_SPEED_FACTOR = 0.7  # le plus lent roule à 0.7 x SPEED
+MAX_SPEED_FACTOR = 1.3  # le plus rapide à 1.3 x SPEED
 SPAWN_DELAY = 0.7  # secondes entre deux départs
-DIVERGE_WINDOW = 2.0  # secondes
+MIN_GAP = 0.15  # en segments : plus près que ça, deux véhicules se heurtent
 
 
 class Vehicle:
     """Un point qui avance de node en node, toujours vers la droite."""
 
-    def __init__(self, number: int, start: Node, departure: float):
+    def __init__(self, number: int, start: Node, departure: float, base_speed: float = SPEED):
         self.number = number
         self.current = start  # dernier node atteint
         self.target = None  # node vers lequel il roule (None = à l'arrêt)
         self.progress = 0.0  # 0 = sur current, 1 = sur target
         self.departure = departure  # instant de départ (secondes)
+        self.base_speed = base_speed  # vitesse propre du véhicule
+        self.speed = base_speed  # vitesse sur le segment en cours = base_speed x allure
+        self.trip_start = departure  # instant où il a quitté le START pour ce trajet
+
+
+def make_pair(a: Vehicle, b: Vehicle) -> tuple[Vehicle, Vehicle]:
+    """Paire rangée par numéro : (a, b) et (b, a) donnent la même paire."""
+    return (a, b) if a.number < b.number else (b, a)
 
 
 class Traffic:
-    """Fait rouler `count` véhicules sur le réseau et applique la règle de divergence."""
+    """Fait rouler `count` véhicules sur le réseau selon une conduite (règle par défaut)."""
 
-    def __init__(self, network: RoadNetwork, count: int, seed: int):
+    def __init__(self, network: RoadNetwork, count: int, seed: int, policy=None):
         self.network = network
+        self.policy = policy if policy is not None else RulePolicy()
         self.rng = random.Random(seed)
         self.time = 0.0
         self.start = network.get_start()
         self.vehicles = []
+        # Hasard séparé : tirer les vitesses ne change pas les choix de sortie d'une seed.
+        speed_rng = random.Random(f"{seed}-speeds")
         if self.start is not None:
-            self.vehicles = [Vehicle(i, self.start, i * SPAWN_DELAY) for i in range(count)]
-        self.passages = {}  # node -> [(instant, sortie choisie)]
-        self.decisions = []  # historique, utilisé par check.py
+            self.vehicles = [
+                Vehicle(i, self.start, i * SPAWN_DELAY,
+                        SPEED * speed_rng.uniform(MIN_SPEED_FACTOR, MAX_SPEED_FACTOR))
+                for i in range(count)
+            ]
+        self.passages = {}  # node -> [(instant, sortie choisie)], mémoire de la règle
+        self.decisions = []  # historique de la règle, utilisé par check.py
         self.forced_divergences = 0
+        self.collisions = 0
+        self.collision_events = []  # [(instant, véhicule, véhicule, (node, node, progress))]
+        self.contacts = set()  # paires en contact à l'image précédente
+        self.previous = {}  # véhicule -> ((node, node), progress) à l'image précédente
+        self.trip_times = []  # durée (s) de chaque trajet START -> END terminé
 
     def update(self, dt: float) -> None:
-        """Avance la simulation de dt secondes."""
+        """Avance la simulation de dt secondes, puis compte les nouvelles collisions."""
         self.time += dt
         for vehicle in self.vehicles:
             if self.time < vehicle.departure:
@@ -49,20 +77,73 @@ class Traffic:
             if vehicle.target is None:
                 self.leave(vehicle)
                 continue
-            vehicle.progress += SPEED * dt
+            vehicle.progress += vehicle.speed * dt
             if vehicle.progress >= 1:
                 vehicle.current = vehicle.target
                 vehicle.progress = 0.0
                 self.leave(vehicle)
+        self.detect_collisions()
+
+    def detect_collisions(self) -> None:
+        """Une collision = un nouveau contact (un contact qui dure ne compte qu'une fois)."""
+        rolling = [vehicle for vehicle in self.get_moving() if vehicle.target is not None]
+        contacts = self.find_contacts(rolling)
+        for a, b in sorted(contacts - self.contacts, key=lambda p: (p[0].number, p[1].number)):
+            self.collisions += 1
+            self.collision_events.append((self.time, a, b, (a.current, a.target, a.progress)))
+            self.policy.on_collision(self, a)
+            self.policy.on_collision(self, b)
+        self.contacts = contacts
+        self.previous = {v: ((v.current, v.target), v.progress) for v in rolling}
+
+    def find_contacts(self, rolling: list[Vehicle]) -> set[tuple[Vehicle, Vehicle]]:
+        """Paires trop proches : sur le même segment, ou autour du même node (fusion, sortie).
+        On range les véhicules par segment et par node pour ne comparer que des voisins."""
+        by_segment = {}
+        near_node = {}  # node -> [(véhicule, distance au node)], seulement si distance < MIN_GAP
+        for vehicle in rolling:
+            by_segment.setdefault((vehicle.current, vehicle.target), []).append(vehicle)
+            for node, distance in ((vehicle.current, vehicle.progress),
+                                   (vehicle.target, 1 - vehicle.progress)):
+                if distance < MIN_GAP:
+                    near_node.setdefault(node, []).append((vehicle, distance))
+        contacts = set()
+        for group in by_segment.values():
+            for a, b in combinations(group, 2):
+                if abs(a.progress - b.progress) < MIN_GAP or self.has_overtaken(a, b):
+                    contacts.add(make_pair(a, b))
+        for node, group in near_node.items():
+            if node.type in (NodeType.START, NodeType.END):
+                continue  # départ et retour des véhicules
+            for (a, distance_a), (b, distance_b) in combinations(group, 2):
+                if distance_a + distance_b < MIN_GAP:
+                    contacts.add(make_pair(a, b))
+        return contacts
+
+    def has_overtaken(self, a: Vehicle, b: Vehicle) -> bool:
+        """Vrai si a et b ont échangé leur ordre sur ce segment depuis l'image précédente :
+        un dépassement est impossible sur une voie, même s'il a eu lieu entre deux images."""
+        segment = (a.current, a.target)
+        before_a, before_b = self.previous.get(a), self.previous.get(b)
+        if before_a is None or before_b is None:
+            return False
+        if before_a[0] != segment or before_b[0] != segment:
+            return False
+        return (before_a[1] - before_b[1]) * (a.progress - b.progress) < 0
 
     def leave(self, vehicle: Vehicle) -> None:
-        """Choisit la prochaine route ; en bout de route, le véhicule repart du START."""
+        """La conduite choisit la route et l'allure ; en bout de route, retour au START."""
+        if vehicle.current is self.start:
+            vehicle.trip_start = self.time
         exits = self.get_exits(vehicle.current)
         if not exits:
+            self.trip_times.append(self.time - vehicle.trip_start)
+            self.policy.on_arrival(self, vehicle)
             vehicle.current = self.start
             vehicle.target = None
             return
-        vehicle.target = self.choose_exit(vehicle.current, exits)
+        vehicle.target, pace = self.policy.choose(self, vehicle, vehicle.current, exits)
+        vehicle.speed = vehicle.base_speed * PACES[pace]
 
     def get_exits(self, node: Node) -> list[Node]:
         """Nodes voisins situés dans la colonne de droite."""
@@ -72,37 +153,6 @@ class Traffic:
             if neighbor.x == node.x + 1:
                 exits.append(neighbor)
         return exits
-
-    def choose_exit(self, node: Node, exits: list[Node]) -> Node:
-        """Choisit une sortie en évitant celles prises récemment par d'autres véhicules."""
-        if len(exits) == 1:
-            return exits[0]
-        recent = [exit_node for moment, exit_node in self.passages.get(node, [])
-                  if self.time - moment <= DIVERGE_WINDOW]
-        free = [exit_node for exit_node in exits if exit_node not in recent]
-        if free:
-            choice = self.rng.choice(free)
-            if recent:
-                self.forced_divergences += 1
-        elif recent:
-            # Toutes les sorties ont été prises dans les 2 s : choisir autre chose
-            # que la dernière sortie, quitte à réutiliser une sortie plus ancienne.
-            last_exit = self.passages[node][-1][1]
-            alternatives = [exit_node for exit_node in exits if exit_node is not last_exit]
-            choice = self.rng.choice(alternatives)
-            self.forced_divergences += 1
-        else:
-            choice = self.rng.choice(exits)
-        self.decisions.append((node, self.time, choice, exits, recent.copy()))
-        self.remember(node, choice)
-        return choice
-
-    def remember(self, node: Node, choice: Node) -> None:
-        """Note le passage et oublie ceux de plus de DIVERGE_WINDOW secondes."""
-        passages = [(moment, exit_node) for moment, exit_node in self.passages.get(node, [])
-                    if self.time - moment <= DIVERGE_WINDOW]
-        passages.append((self.time, choice))
-        self.passages[node] = passages
 
     def get_moving(self) -> list[Vehicle]:
         """Véhicules déjà partis."""
