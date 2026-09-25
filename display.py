@@ -8,8 +8,6 @@ import time
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
 from matplotlib.lines import Line2D
-from matplotlib.patches import PathPatch
-from matplotlib.path import Path
 from matplotlib.widgets import Button, RadioButtons, Slider
 
 from learning import DRIVINGS, make_policy
@@ -50,60 +48,67 @@ CRASH_SIZE = 220
 CRASH_DURATION = 0.6  # secondes : la croix de collision s'efface pendant ce temps
 CURVED_ROADS = True  # False = segments droits
 JITTER = 0.3  # décalage max à l'écran ; < 0.5 garde l'ordre des nodes (aucun croisement)
-layout = {"seed": 0}  # seed du décalage, changée à chaque réseau
+layout = {"seed": 0, "circuit": None}  # seed du décalage ; circuit affiché (ou None)
+CURVE_SAMPLES = 12  # points par route dessinée
 CURVE_STRENGTH = 0.5  # 0 = droit, 0.5 = courbe douce
 FRAME_INTERVAL = 50  # millisecondes entre deux images (20 fps : fluide, CPU raisonnable)
 SEGMENTS_PER_FRAME = 1  # vitesse de construction
 MAX_DT = 0.1  # secondes : évite un saut si la fenêtre a gelé
-FIGURE_SIZE = (10, 7)
+FIGURE_SIZE = (12, 8)
 MAX_ROADS = 10
 MAX_INTERSECTIONS = 15
 MAX_VEHICLES = 20
 
 
-def get_position(node: Node) -> tuple[float, float]:
-    """Position à l'écran : la case de la grille + un petit décalage au hasard (aspect organique).
-    Même seed + même case = même décalage. Le modèle, lui, reste sur la grille."""
-    rng = random.Random(f"{layout['seed']}-{node.x}-{node.y}")
+def get_local_position(node: Node) -> tuple[float, float]:
+    """Position dans la grille + petit décalage au hasard (aspect organique).
+    Même seed + même case = même décalage. START et END ne bougent pas (jonctions du circuit)."""
+    if node.type in (NodeType.START, NodeType.END):
+        return float(node.x), float(node.y)
+    rng = random.Random(f"{layout['seed']}-{node.frame}-{node.x}-{node.y}")
     return (node.x + rng.uniform(-JITTER, JITTER), node.y + rng.uniform(-JITTER, JITTER))
 
 
+def to_screen(node: Node, x: float, y: float) -> tuple[float, float]:
+    """Réseau simple : l'écran = la grille. Circuit : le cadre est plié le long de son arc."""
+    circuit = layout["circuit"]
+    if circuit is None or node.frame is None:
+        return x, y
+    return circuit.to_screen(node.frame, x, y)
+
+
+def get_position(node: Node) -> tuple[float, float]:
+    """Position d'un node à l'écran."""
+    return to_screen(node, *get_local_position(node))
+
+
 def get_curve_points(a: Node, b: Node) -> list[tuple[float, float]]:
-    """4 points de contrôle d'une courbe de Bézier à tangentes horizontales (a à gauche)."""
-    (ax_, ay), (bx, by) = get_position(a), get_position(b)
+    """4 points de contrôle (grille locale) d'une Bézier à tangentes horizontales (a à gauche)."""
+    (ax_, ay), (bx, by) = get_local_position(a), get_local_position(b)
     bend = CURVE_STRENGTH * (bx - ax_)
     return [(ax_, ay), (ax_ + bend, ay), (bx - bend, by), (bx, by)]
 
 
 def get_point_on_segment(a: Node, b: Node, t: float) -> tuple[float, float]:
-    """Position à t (0 -> 1) sur la route a -> b, en suivant la même forme que le dessin."""
-    if not CURVED_ROADS:
-        (x0, y0), (x1, y1) = get_position(a), get_position(b)
-        return x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
+    """Position à t (0 -> 1) sur la route a -> b : calculée dans la grille, puis mise à l'écran."""
     if a.x > b.x:
         a, b, t = b, a, 1 - t
     (x0, y0), (x1, y1), (x2, y2), (x3, y3) = get_curve_points(a, b)
+    if not CURVED_ROADS:
+        return to_screen(a, x0 + (x3 - x0) * t, y0 + (y3 - y0) * t)
     u = 1 - t
     x = u**3 * x0 + 3 * u**2 * t * x1 + 3 * u * t**2 * x2 + t**3 * x3
     y = u**3 * y0 + 3 * u**2 * t * y1 + 3 * u * t**2 * y2 + t**3 * y3
-    return x, y
+    return to_screen(a, x, y)
 
 
 def draw_segment(ax, segment: Segment, color: str = ROAD_COLOR, width: float = ROAD_WIDTH,
                  zorder: float = 1) -> None:
-    """Dessine un segment, droit ou en courbe douce."""
-    a, b = segment.start, segment.end
-    if a.x > b.x:
-        a, b = b, a  # toujours dessiner de gauche à droite
-    if CURVED_ROADS:
-        codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
-        ax.add_patch(PathPatch(Path(get_curve_points(a, b), codes), fill=False,
-                               edgecolor=color, linewidth=width, capstyle="round",
-                               zorder=zorder))
-    else:
-        (x0, y0), (x1, y1) = get_position(a), get_position(b)
-        ax.plot([x0, x1], [y0, y1], color=color, linewidth=width,
-                solid_capstyle="round", zorder=zorder)
+    """Dessine un segment : CURVE_SAMPLES points le long de la route, reliés."""
+    points = [get_point_on_segment(segment.start, segment.end, i / (CURVE_SAMPLES - 1))
+              for i in range(CURVE_SAMPLES)]
+    ax.plot([x for x, _ in points], [y for _, y in points], color=color, linewidth=width,
+            solid_capstyle="round", zorder=zorder)
 
 
 def draw_node(ax, node: Node) -> None:
@@ -116,7 +121,8 @@ def draw_shortest_path(ax, network: RoadNetwork) -> None:
     """Surligne le plus court chemin START -> END sous les routes."""
     path = network.get_shortest_path()
     for a, b in zip(path, path[1:]):
-        draw_segment(ax, Segment(a, b), color=PATH_COLOR, width=PATH_WIDTH, zorder=0.5)
+        if a.frame == b.frame:  # circuit : END d'un cadre -> START du suivant = même point
+            draw_segment(ax, Segment(a, b), color=PATH_COLOR, width=PATH_WIDTH, zorder=0.5)
 
 
 def draw_legend(ax) -> None:
@@ -146,8 +152,12 @@ def draw_grid(ax, network: RoadNetwork, title: str) -> None:
     """Efface l'écran et dessine la grille vide (tous les nodes en UNUSED)."""
     ax.clear()
     ax.set_title(title)
-    ax.set_xlim(-1, network.columns)
-    ax.set_ylim(-1, network.rows)
+    if hasattr(network, "get_bounds"):  # circuit
+        xmin, xmax, ymin, ymax = network.get_bounds()
+    else:
+        xmin, xmax, ymin, ymax = -1, network.columns, -1, network.rows
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
     ax.set_aspect("equal")
     ax.axis("off")
     draw_legend(ax)
@@ -190,6 +200,16 @@ def get_recent_crashes(traffic: Traffic) -> list[tuple[float, float, float]]:
     return crashes
 
 
+def get_ranking_text(traffic: Traffic) -> str:
+    """Classement : rang, prénom, tours, meilleur tour, collisions."""
+    lines = ["#  Prénom    Tours  Meilleur  Coll."]
+    for rank, vehicle in enumerate(traffic.get_ranking(), 1):
+        best = f"{vehicle.best_lap:5.1f} s" if vehicle.best_lap is not None else "    –  "
+        lines.append(f"{rank:<2} {vehicle.name:<9} {vehicle.laps:>5}  {best}  "
+                     f"{vehicle.collisions:>5}")
+    return "\n".join(lines)
+
+
 class NetworkView:
     """La fenêtre : construit le réseau en animation, puis fait rouler les véhicules."""
 
@@ -202,8 +222,11 @@ class NetworkView:
         self.animation = None
         self.fig, self.ax = plt.subplots(figsize=FIGURE_SIZE)
         self.fig.canvas.manager.set_window_title("RoadNetwork")
-        self.fig.subplots_adjust(right=0.8, bottom=0.28)
+        self.fig.subplots_adjust(left=0.24, right=0.82, bottom=0.28, top=0.95)
         self.info = self.fig.text(0.5, 0.25, "", ha="center", color="#555555", animated=True)
+        self.ranking = self.fig.text(0.01, 0.97, "", va="top", family="monospace", fontsize=8,
+                                     color="#303844", animated=True)
+        self.name_artists = []  # un texte (prénom) par véhicule
         self.vehicle_artist = None
         self.crash_artist = None
         self.notice = ""  # message si la conduite demandée n'a pas pu être chargée
@@ -284,6 +307,7 @@ class NetworkView:
         if self.animation is not None:
             self.animation.stop()
         layout["seed"] = self.seed  # nouveau réseau = nouvelle forme organique
+        layout["circuit"] = self.network if hasattr(self.network, "frames") else None
         self.path_length = self.network.get_shortest_path_length()
         draw_grid(self.ax, self.network, self.get_title())
         self.built = 0
@@ -303,6 +327,10 @@ class NetworkView:
         self.crash_artist = self.ax.scatter([], [], s=CRASH_SIZE, marker="x", linewidths=3,
                                             color=CRASH_COLOR, zorder=5, animated=True)
         self.vehicle_colors = colors
+        self.name_artists = [self.ax.text(0, 0, vehicle.name, fontsize=7, zorder=6,
+                                          color=colors[vehicle.number], animated=True,
+                                          fontweight="bold", visible=False)
+                             for vehicle in self.traffic.vehicles]
         self.last_time = time.perf_counter()
         self.info.set_text("")
         self.background = None
@@ -322,7 +350,10 @@ class NetworkView:
         if self.vehicle_artist is not None:
             self.ax.draw_artist(self.vehicle_artist)
             self.ax.draw_artist(self.crash_artist)
+            for artist in self.name_artists:
+                self.ax.draw_artist(artist)
         self.fig.draw_artist(self.info)
+        self.fig.draw_artist(self.ranking)
 
     def update_frame(self, frame: int) -> None:
         """Une image : d'abord la construction, ensuite la circulation."""
@@ -352,6 +383,12 @@ class NetworkView:
         self.vehicle_artist.set_offsets(positions if positions else [[float("nan")] * 2])
         if positions:
             self.vehicle_artist.set_facecolors([self.vehicle_colors[v.number] for v in moving])
+        for artist in self.name_artists:
+            artist.set_visible(False)
+        for vehicle, (x, y) in zip(moving, positions):
+            self.name_artists[vehicle.number].set_position((x + 0.2, y + 0.2))
+            self.name_artists[vehicle.number].set_visible(True)
+        self.ranking.set_text(get_ranking_text(self.traffic))
         crashes = get_recent_crashes(self.traffic)
         self.crash_artist.set_offsets([(x, y) for x, y, _ in crashes] or [[float("nan")] * 2])
         if crashes:

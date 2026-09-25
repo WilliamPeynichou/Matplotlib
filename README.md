@@ -114,6 +114,10 @@ La conduite apprise fait moins de collisions que la règle sur les 20 réseaux, 
 
 **Limites, honnêtement** : une règle écrite à la main (réserver le node suivant quelques instants) pourrait aussi supprimer les collisions ; l'intérêt ici est de montrer qu'un agent les évite **sans qu'on lui dise comment**. Les collisions ne bloquent pas les véhicules (ils se traversent) : elles sont seulement comptées et punies. Détail des choix et des mesures : [ml_archi/tickets.md](ml_archi/tickets.md).
 
+## Circuit
+
+Par défaut (`CIRCUIT = True` dans `main.py`) : 4 grilles reliées en boucle, le END de chacune est le START de la suivante. Chaque voiture a un prénom unique, compte ses tours et son meilleur tour ; classement en haut à gauche. Détails : `docs/circuit.md`. `CIRCUIT = False` = réseau simple START → END.
+
 ## Architecture
 
 | Fichier | Responsabilité |
@@ -128,6 +132,7 @@ La conduite apprise fait moins de collisions que la règle sur les 20 réseaux, 
 | `q_table.json` | la conduite apprise (table Q), une ligne par état |
 | `evaluate.py` | compare hasard, règle et conduite apprise sur 20 réseaux de test |
 | `display.py` | fenêtre, curseurs, dessin et animation |
+| `circuit.py` | 4 cadres en boucle, coordonnées écran |
 | `main.py` | point d'entrée et réglages par défaut |
 | `check.py` | vérifications automatiques (balayage) |
 | `test_roadnetwork.py` | tests pytest, une règle = un test |

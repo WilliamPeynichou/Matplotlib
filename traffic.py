@@ -20,6 +20,14 @@ MIN_SPEED_FACTOR = 0.7  # le plus lent roule à 0.7 x SPEED
 MAX_SPEED_FACTOR = 1.3  # le plus rapide à 1.3 x SPEED
 SPAWN_DELAY = 0.7  # secondes entre deux départs
 MIN_GAP = 0.15  # en segments : plus près que ça, deux véhicules se heurtent
+NAMES = ["Alice", "Bruno", "Chloé", "David", "Emma", "Farid", "Gaïa", "Hugo", "Inès", "Jules",
+         "Karim", "Léa", "Malik", "Nina", "Oscar", "Paul", "Rose", "Sami", "Théo", "Zoé"]
+
+
+def make_name(number: int) -> str:
+    """Prénom unique : Alice, Bruno… puis Alice 2, Bruno 2… si plus de 20 véhicules."""
+    name = NAMES[number % len(NAMES)]
+    return name if number < len(NAMES) else f"{name} {number // len(NAMES) + 1}"
 
 
 class Vehicle:
@@ -27,6 +35,11 @@ class Vehicle:
 
     def __init__(self, number: int, start: Node, departure: float, base_speed: float = SPEED):
         self.number = number
+        self.name = make_name(number)  # nominatif et unique
+        self.laps = 0  # tours terminés (retour à la ligne de départ)
+        self.best_lap = None  # meilleur temps de tour (secondes)
+        self.lap_start = departure
+        self.collisions = 0
         self.current = start  # dernier node atteint
         self.target = None  # node vers lequel il roule (None = à l'arrêt)
         self.progress = 0.0  # 0 = sur current, 1 = sur target
@@ -90,6 +103,8 @@ class Traffic:
         contacts = self.find_contacts(rolling)
         for a, b in sorted(contacts - self.contacts, key=lambda p: (p[0].number, p[1].number)):
             self.collisions += 1
+            a.collisions += 1
+            b.collisions += 1
             self.collision_events.append((self.time, a, b, (a.current, a.target, a.progress)))
             self.policy.on_collision(self, a)
             self.policy.on_collision(self, b)
@@ -133,17 +148,33 @@ class Traffic:
 
     def leave(self, vehicle: Vehicle) -> None:
         """La conduite choisit la route et l'allure ; en bout de route, retour au START."""
-        if vehicle.current is self.start:
+        if vehicle.current.type is NodeType.START:
             vehicle.trip_start = self.time
         exits = self.get_exits(vehicle.current)
         if not exits:
             self.trip_times.append(self.time - vehicle.trip_start)
             self.policy.on_arrival(self, vehicle)
-            vehicle.current = self.start
+            # Réseau simple : retour au START. Circuit : START du cadre suivant.
+            vehicle.current = self.network.get_next_start(vehicle.current)
             vehicle.target = None
+            if vehicle.current is self.start:
+                self.finish_lap(vehicle)
             return
         vehicle.target, pace = self.policy.choose(self, vehicle, vehicle.current, exits)
         vehicle.speed = vehicle.base_speed * PACES[pace]
+
+    def finish_lap(self, vehicle: Vehicle) -> None:
+        """Un tour de plus, et peut-être un meilleur temps."""
+        lap = self.time - vehicle.lap_start
+        vehicle.laps += 1
+        if vehicle.best_lap is None or lap < vehicle.best_lap:
+            vehicle.best_lap = lap
+        vehicle.lap_start = self.time
+
+    def get_ranking(self) -> list[Vehicle]:
+        """Classement : plus de tours d'abord, puis meilleur tour le plus court."""
+        return sorted(self.get_moving(), key=lambda v: (-v.laps, v.best_lap or float("inf"),
+                                                         v.number))
 
     def get_exits(self, node: Node) -> list[Node]:
         """Nodes voisins situés dans la colonne de droite."""

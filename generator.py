@@ -11,7 +11,7 @@ MAX_ATTEMPTS = 200  # essais pour atteindre le nombre d'intersections demandé
 
 
 def generate_network(network: RoadNetwork, seed: int, roads: int = DEFAULT_ROADS,
-                     intersections: int | None = None) -> int:
+                     intersections: int | None = None, fixed_end: bool = False) -> int:
     """Génère `roads` routes. Si `intersections` est donné, fait plusieurs essais
     et garde le réseau le plus proche. Renvoie le nombre d'intersections obtenu."""
     roads = max(1, roads)  # au moins la route principale
@@ -19,7 +19,7 @@ def generate_network(network: RoadNetwork, seed: int, roads: int = DEFAULT_ROADS
     best_state, best_score = None, None
     for _ in range(MAX_ATTEMPTS if intersections is not None else 1):
         state = rng.getstate()
-        built = build_network(network, rng, roads)
+        built = build_network(network, rng, roads, fixed_end)
         count = count_intersections(network)
         target = count if intersections is None else intersections
         score = (roads - built, abs(count - target))  # d'abord toutes les routes, puis l'écart
@@ -28,20 +28,26 @@ def generate_network(network: RoadNetwork, seed: int, roads: int = DEFAULT_ROADS
         if score == (0, 0):
             return count
     rng.setstate(best_state)  # rejoue le meilleur essai (même hasard = même réseau)
-    build_network(network, rng, roads)
+    build_network(network, rng, roads, fixed_end)
     return count_intersections(network)
 
 
-def build_network(network: RoadNetwork, rng: random.Random, roads: int) -> int:
+def build_network(network: RoadNetwork, rng: random.Random, roads: int,
+                  fixed_end: bool = False) -> int:
     """Un essai : chemin principal START -> END, puis des branches qui rejoignent
     la route. Renvoie le nombre de routes construites."""
     network.reset()
     start = network.get_node(0, network.rows // 2)
     start.type = NodeType.START
-    path = find_path(network, rng, start, None)
-    add_path(network, path)
-    end = path[-1]
-    end.type = NodeType.END
+    if fixed_end:  # circuit : END au milieu de la dernière colonne (jonction avec le cadre suivant)
+        end = network.get_node(network.columns - 1, network.rows // 2)
+        end.type = NodeType.END
+        add_path(network, find_path(network, rng, start, end, min_length=2))
+    else:
+        path = find_path(network, rng, start, None)
+        add_path(network, path)
+        end = path[-1]
+        end.type = NodeType.END
     built = 1
     for _ in range(roads - 1):
         on_road = [n for n in network.nodes if n.type is not NodeType.UNUSED and n is not end]
@@ -53,7 +59,7 @@ def build_network(network: RoadNetwork, rng: random.Random, roads: int) -> int:
 
 
 def find_path(network: RoadNetwork, rng: random.Random, start: Node,
-              end: Node | None) -> list[Node] | None:
+              end: Node | None, min_length: int = 3) -> list[Node] | None:
     """Avance d'une colonne par pas jusqu'à la dernière colonne (route principale)
     ou jusqu'à retomber sur la route (branche). Une branche vise toujours le END :
     elle ne peut pas finir en cul-de-sac. Renvoie None si bloqué."""
@@ -67,7 +73,7 @@ def find_path(network: RoadNetwork, rng: random.Random, start: Node,
         current = following
         if end is not None and following.type is not NodeType.UNUSED:
             break  # rejoint la route existante, qui mène déjà au END
-    if end is not None and len(path) < 3:
+    if end is not None and len(path) < min_length:
         return None  # branche trop courte : doublon inutile
     return path
 

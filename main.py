@@ -2,13 +2,17 @@
 
 import random
 
+from circuit import Circuit
 from display import show
 from generator import generate_network
 from learning import DRIVINGS
 from network import RoadNetwork
 
+CIRCUIT = True  # True = 4 cadres en boucle ; False = un seul réseau START -> END
 COLUMNS = 15
 ROWS = 9
+FRAME_COLUMNS = 10  # taille d'un cadre du circuit
+FRAME_ROWS = 5
 SEED = None  # mettre un nombre (ex. 4821) pour rejouer exactement un réseau
 MAX_SEED = 99999
 ROADS = 4  # chemin principal + branches
@@ -27,9 +31,9 @@ def create_seed() -> int:
 def main() -> None:
     """Lance RoadNetwork."""
     try:
-        network = RoadNetwork(COLUMNS, ROWS)
+        network = Circuit(FRAME_COLUMNS, FRAME_ROWS) if CIRCUIT else RoadNetwork(COLUMNS, ROWS)
     except ValueError as error:
-        print(f"Erreur : {error}. Corrige COLUMNS / ROWS dans main.py.")
+        print(f"Erreur : {error}. Corrige la taille dans main.py.")
         return
     driving = DRIVING
     if driving not in DRIVINGS:
@@ -41,7 +45,10 @@ def main() -> None:
 
     def generate(seed: int, roads: int, intersections: int) -> int:
         """Génère le réseau et renvoie le nombre d'intersections obtenu."""
-        count = generate_network(network, seed, roads, intersections)
+        if CIRCUIT:
+            count = network.generate(seed, roads, intersections)
+        else:
+            count = generate_network(network, seed, roads, intersections)
         print(f"Seed : {seed}  routes : {roads}  intersections : {count}/{intersections}")
         return count
 

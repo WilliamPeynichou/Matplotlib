@@ -21,6 +21,7 @@ class Node:
         self.y = y
         self.type = NodeType.UNUSED
         self.segments = []  # créée ici : une liste propre à chaque node
+        self.frame = None  # numéro du cadre dans un circuit (None = réseau simple)
 
     def update_type(self) -> None:
         """Recalcule le type selon le nombre de segments (START et END ne changent jamais)."""

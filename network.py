@@ -69,6 +69,10 @@ class RoadNetwork:
                 return node
         return None
 
+    def get_next_start(self, end: Node) -> Node | None:
+        """Où repart un véhicule arrivé au END : réseau simple = retour au START."""
+        return self.get_start()
+
     def get_shortest_path(self) -> list[Node]:
         """Plus court chemin START -> END en nombre de segments (parcours en largeur, BFS)."""
         start = self.get_start()
