@@ -41,7 +41,7 @@ def main() -> None:
         """Tire une nouvelle seed pour le bouton Randomize."""
         return random.randint(0, MAX_SEED)
 
-    show(network, create_seed(), settings, generate, new_seed)
+    show(network, create_seed(), settings, generate, new_seed, MAX_SEED)
 
 
 if __name__ == "__main__":

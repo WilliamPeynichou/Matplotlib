@@ -3,12 +3,17 @@
 import random
 import time
 
+import matplotlib
+
+matplotlib.use("TkAgg")  # requis : la barre Seed (controls.py) est un vrai widget Tk
+
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path
-from matplotlib.widgets import Button, Slider
+from matplotlib.widgets import Slider
 
+from controls import SeedControls
 from models import Node, NodeType, Segment
 from network import RoadNetwork
 from traffic import Traffic
@@ -172,9 +177,11 @@ def get_vehicle_positions(traffic: Traffic) -> list[tuple[float, float]]:
 class NetworkView:
     """La fenêtre : construit le réseau en animation, puis fait rouler les véhicules."""
 
-    def __init__(self, network: RoadNetwork, seed: int, settings: dict, generate, new_seed):
+    def __init__(self, network: RoadNetwork, seed: int, settings: dict, generate, new_seed,
+                 max_seed: int):
         self.network = network
         self.seed = seed
+        self.max_seed = max_seed
         self.settings = settings  # {"roads": int, "intersections": int, "vehicles": int}
         self.generate = generate  # generate(seed, roads, intersections) -> intersections
         self.new_seed = new_seed  # new_seed() -> int
@@ -190,7 +197,7 @@ class NetworkView:
         self.regenerate()
 
     def create_controls(self) -> None:
-        """Curseurs (routes, intersections, véhicules) et bouton Randomize."""
+        """Curseurs matplotlib (routes, intersections, véhicules) et barre Seed en Tk natif."""
         self.roads_slider = Slider(self.fig.add_axes([0.25, 0.17, 0.45, 0.03]), "Routes",
                                    1, MAX_ROADS, valinit=self.settings["roads"], valstep=1)
         self.intersections_slider = Slider(
@@ -199,11 +206,47 @@ class NetworkView:
         self.vehicles_slider = Slider(self.fig.add_axes([0.25, 0.07, 0.45, 0.03]), "Véhicules",
                                       0, MAX_VEHICLES, valinit=self.settings["vehicles"],
                                       valstep=1)
-        self.button = Button(self.fig.add_axes([0.42, 0.01, 0.16, 0.045]), "Randomize")
         self.roads_slider.on_changed(self.on_network_change)
         self.intersections_slider.on_changed(self.on_network_change)
         self.vehicles_slider.on_changed(self.on_vehicles_change)
-        self.button.on_clicked(self.on_randomize)
+        self.seed_controls = SeedControls(self.fig.canvas.manager.window, self.seed,
+                                          on_generate=self.on_generate_click,
+                                          on_submit=self.on_seed_entry_submit)
+
+    def read_seed(self, text: str) -> int | None:
+        """Convertit le texte du champ Seed en entier valide (0..max_seed), sinon None."""
+        try:
+            value = int(text)
+        except ValueError:
+            return None
+        return value if 0 <= value <= self.max_seed else None
+
+    def show_invalid_seed(self) -> None:
+        """Affiche le message d'erreur seed invalide, réseau précédent conservé."""
+        self.info.set_text(f"Seed invalide : entier entre 0 et {self.max_seed} attendu")
+        self.fig.canvas.draw_idle()
+
+    def on_seed_entry_submit(self) -> None:
+        """Entrée dans le champ Seed : régénère avec la seed tapée, sinon message d'erreur."""
+        value = self.read_seed(self.seed_controls.get_text())
+        if value is None:
+            self.show_invalid_seed()
+            return
+        self.seed = value
+        self.regenerate()
+
+    def on_generate_click(self) -> None:
+        """Bouton Generate : nouvelle seed si Randomize est coché, sinon seed du champ Seed."""
+        if self.seed_controls.is_randomize():
+            seed = self.new_seed()
+        else:
+            seed = self.read_seed(self.seed_controls.get_text())
+            if seed is None:
+                self.show_invalid_seed()
+                return
+        self.seed = seed
+        self.seed_controls.set_seed(self.seed)  # le champ reflète toujours la seed utilisée
+        self.regenerate()
 
     def on_network_change(self, value) -> None:
         """Curseur routes ou intersections : même seed, nouveau réseau."""
@@ -215,11 +258,6 @@ class NetworkView:
         """Curseur véhicules : même réseau, on relance seulement la circulation."""
         self.settings["vehicles"] = int(self.vehicles_slider.val)
         self.start_traffic()
-
-    def on_randomize(self, event) -> None:
-        """Bouton : nouvelle seed, mêmes réglages."""
-        self.seed = self.new_seed()
-        self.regenerate()
 
     def regenerate(self) -> None:
         """Génère le réseau puis rejoue sa construction."""
@@ -307,8 +345,9 @@ class NetworkView:
                            f"divergences (fenêtre 2 s) : {self.traffic.forced_divergences}")
 
 
-def show(network: RoadNetwork, seed: int, settings: dict, generate, new_seed) -> None:
+def show(network: RoadNetwork, seed: int, settings: dict, generate, new_seed,
+        max_seed: int) -> None:
     """Ouvre la fenêtre et attend sa fermeture."""
-    view = NetworkView(network, seed, settings, generate, new_seed)
+    view = NetworkView(network, seed, settings, generate, new_seed, max_seed)
     view.fig.view = view  # garder une référence (animation, curseurs, bouton)
     plt.show()

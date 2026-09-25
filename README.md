@@ -7,15 +7,16 @@ Projet du Bootcamp Python B3 – Sup de Vinci 2026-2027.
 
 ## Installation
 
-Prérequis : Python 3.14.
+Prérequis : Python 3.14 avec Tk (module `tkinter`, utilisé par la barre Seed).
 
 ```bash
 # macOS / Linux
+sudo apt install python3-tk   # si tkinter n'est pas déjà installé (Debian/Ubuntu)
 python3 -m venv .venv
 ./.venv/bin/python -m pip install -r requirements.txt
 
 # Windows PowerShell
-python -m venv .venv
+python -m venv .venv                                      # tkinter est inclus avec Python
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
@@ -26,9 +27,17 @@ python -m venv .venv
 .\.venv\Scripts\python.exe main.py  # Windows
 ```
 
-La fenêtre propose des curseurs pour régler le nombre de routes, le nombre d'intersections visé et le nombre de véhicules. Clique **Randomize** pour changer de réseau. Les véhicules parcourent les routes ; à chaque intersection, ils prennent une autre sortie que le dernier véhicule passé dans les 2 secondes, si une autre sortie existe.
+La fenêtre propose des curseurs pour régler le nombre de routes, le nombre d'intersections visé et le nombre de véhicules. Les véhicules parcourent les routes ; à chaque intersection, ils prennent une autre sortie que le dernier véhicule passé dans les 2 secondes, si une autre sortie existe.
 
-La seed apparaît dans le titre et le terminal. Pour rejouer un réseau, mettre `SEED = 4821` dans `main.py`.
+**Contrôles de la seed** (barre Tk native sous la fenêtre, voir `controls.py`) :
+
+- **Seed** : champ de saisie affichant la seed courante. Ctrl+A sélectionne tout, Ctrl+C copie, Ctrl+V colle (raccourcis natifs de `tk.Entry`). Entrée valide le nombre tapé (0 à 99999) et régénère directement ; une valeur invalide affiche un message sous la fenêtre et garde le réseau précédent.
+- **Randomize** : case cochée par défaut. Cochée, le bouton **Generate** tire une nouvelle seed au hasard et met à jour le champ Seed. Décochée, **Generate** régénère avec la seed tapée dans le champ (pas besoin d'appuyer sur Entrée) : cliquer plusieurs fois reproduit le même réseau.
+- **Generate** : lance la génération selon l'état de Randomize.
+
+Le champ Seed reste toujours synchronisé avec la seed effectivement utilisée par le réseau affiché.
+
+La seed apparaît dans le titre et le terminal. Pour rejouer un réseau au démarrage, mettre `SEED = 4821` dans `main.py`.
 
 Les intersections sont un nombre **visé** : si la combinaison taille de grille / nombre de routes ne permet pas le nombre demandé, le titre indique le nombre obtenu et le nombre demandé. La génération cherche le meilleur réseau après un nombre limité d'essais.
 
@@ -64,7 +73,7 @@ Grille invalide (`COLUMNS < 2` ou `ROWS < 1`) : le programme affiche un message 
 - Graphe de nodes et segments, cinq types de node.
 - Chemin principal et nombre réglable de routes secondaires.
 - Nombre d'intersections visé réglable ; génération cherche une solution proche.
-- Seed reproductible, Randomize.
+- Seed reproductible : barre Tk native (`controls.py`) avec champ de saisie (Ctrl+A/C/V), case Randomize et bouton Generate.
 - Construction animée, routes courbes et légende.
 - Aspect organique : chaque node est légèrement décalé à l'écran (`JITTER` dans `display.py`), même seed = même forme. Le modèle reste une grille, donc les règles et les tests ne changent pas.
 - Toutes les routes rejoignent le END (aucun cul-de-sac).
@@ -84,6 +93,7 @@ Grille invalide (`COLUMNS < 2` ou `ROWS < 1`) : le programme affiche un message 
 | `generator.py` | construction du réseau et branches |
 | `traffic.py` | véhicules, mouvement, décisions de sortie |
 | `display.py` | fenêtre, curseurs, dessin et animation |
+| `controls.py` | barre Tk native : champ Seed, case Randomize, bouton Generate |
 | `main.py` | point d'entrée et réglages par défaut |
 | `check.py` | vérifications automatiques (balayage) |
 | `test_roadnetwork.py` | tests pytest, une règle = un test |
