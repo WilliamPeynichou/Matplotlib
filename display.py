@@ -49,6 +49,7 @@ CRASH_DURATION = 0.6  # secondes : la croix de collision s'efface pendant ce tem
 CURVED_ROADS = True  # False = segments droits
 JITTER = 0.3  # décalage max à l'écran ; < 0.5 garde l'ordre des nodes (aucun croisement)
 layout = {"seed": 0, "circuit": None}  # seed du décalage ; circuit affiché (ou None)
+ALICE_LABELS = {"tree": "arbre de décision (supervisé)", "rl": "Q-learning (renforcement)"}
 CURVE_SAMPLES = 12  # points par route dessinée
 CURVE_STRENGTH = 0.5  # 0 = droit, 0.5 = courbe douce
 FRAME_INTERVAL = 50  # millisecondes entre deux images (20 fps : fluide, CPU raisonnable)
@@ -200,13 +201,29 @@ def get_recent_crashes(traffic: Traffic) -> list[tuple[float, float, float]]:
     return crashes
 
 
-def get_ranking_text(traffic: Traffic) -> str:
-    """Classement : rang, prénom, tours, meilleur tour, collisions."""
+def make_alice_policy(alice: str | None):
+    """Conduite spéciale d'Alice : "tree" (supervisé), "rl" (renforcement) ou None."""
+    if alice == "tree":
+        from tree_model import make_tree_policy
+        return make_tree_policy()
+    if alice == "rl":
+        from alice import make_alice_policies
+        return make_alice_policies()["RL"]()
+    return None
+
+
+def get_ranking_text(traffic: Traffic, alice: str | None = None) -> str:
+    """Classement : rang, prénom, tours, meilleur tour, collisions. Alice (ML) marquée."""
     lines = ["#  Prénom    Tours  Meilleur  Coll."]
     for rank, vehicle in enumerate(traffic.get_ranking(), 1):
         best = f"{vehicle.best_lap:5.1f} s" if vehicle.best_lap is not None else "    –  "
-        lines.append(f"{rank:<2} {vehicle.name:<9} {vehicle.laps:>5}  {best}  "
+        name = vehicle.name
+        if alice and vehicle.number == 0:
+            name = f"{name}*"
+        lines.append(f"{rank:<2} {name:<9} {vehicle.laps:>5}  {best}  "
                      f"{vehicle.collisions:>5}")
+    if alice:
+        lines.append(f"\n* Alice conduit avec : {ALICE_LABELS[alice]}")
     return "\n".join(lines)
 
 
@@ -320,7 +337,11 @@ class NetworkView:
             self.notice = "Table apprise absente ou abîmée (lancer train.py) : conduite Règle."
             self.settings["driving"] = driving
             self.select_driving(driving)
-        self.traffic = Traffic(self.network, self.settings["vehicles"], self.seed, policy)
+        alice = self.settings.get("alice")
+        alice_policy = make_alice_policy(alice)
+        special = {0: alice_policy} if alice_policy is not None else None
+        self.traffic = Traffic(self.network, self.settings["vehicles"], self.seed, policy,
+                               special=special)
         colors =[VEHICLE_COLORS[i % len(VEHICLE_COLORS)] for i in range(self.settings["vehicles"])]
         self.vehicle_artist = self.ax.scatter([], [], s=VEHICLE_SIZE, zorder=4, animated=True,
                                               edgecolors="white", linewidths=1.5)
@@ -388,7 +409,11 @@ class NetworkView:
         for vehicle, (x, y) in zip(moving, positions):
             self.name_artists[vehicle.number].set_position((x + 0.2, y + 0.2))
             self.name_artists[vehicle.number].set_visible(True)
-        self.ranking.set_text(get_ranking_text(self.traffic))
+        self.ranking.set_text(get_ranking_text(self.traffic, self.settings.get("alice")))
+        if self.settings.get("alice") and positions:  # Alice : contour noir épais
+            self.vehicle_artist.set_linewidths([4 if v.number == 0 else 1.5 for v in moving])
+            self.vehicle_artist.set_edgecolors(["black" if v.number == 0 else "white"
+                                                for v in moving])
         crashes = get_recent_crashes(self.traffic)
         self.crash_artist.set_offsets([(x, y) for x, y, _ in crashes] or [[float("nan")] * 2])
         if crashes:

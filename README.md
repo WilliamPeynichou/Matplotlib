@@ -118,6 +118,17 @@ La conduite apprise fait moins de collisions que la règle sur les 20 réseaux, 
 
 Par défaut (`CIRCUIT = True` dans `main.py`) : 4 grilles reliées en boucle, le END de chacune est le START de la suivante. Chaque voiture a un prénom unique, compte ses tours et son meilleur tour ; classement en haut à gauche. Détails : `docs/circuit.md`. `CIRCUIT = False` = réseau simple START → END.
 
+## Expérience Alice (ML sur une seule voiture)
+
+Alice (voiture n°0) conduit avec un modèle de ML, les autres avec la Règle : on voit la différence.
+
+```bash
+.venv/bin/python tree_model.py   # apprentissage supervisé : arbre de décision
+.venv/bin/python alice.py        # apprentissage par renforcement (Q-learning) + comparaison
+```
+
+Guide pas à pas pour débutant : `docs/ml_alice.md`. Choix dans `main.py` : `ALICE = "rl"`, `"tree"` ou `None`.
+
 ## Architecture
 
 | Fichier | Responsabilité |
@@ -133,6 +144,8 @@ Par défaut (`CIRCUIT = True` dans `main.py`) : 4 grilles reliées en boucle, le
 | `evaluate.py` | compare hasard, règle et conduite apprise sur 20 réseaux de test |
 | `display.py` | fenêtre, curseurs, dessin et animation |
 | `circuit.py` | 4 cadres en boucle, coordonnées écran |
+| `tree_model.py` | ML supervisé : collecte, arbre de décision, conduite `TreePolicy` |
+| `alice.py` | RL sur Alice seule + comparaison des 4 conduites |
 | `main.py` | point d'entrée et réglages par défaut |
 | `check.py` | vérifications automatiques (balayage) |
 | `test_roadnetwork.py` | tests pytest, une règle = un test |

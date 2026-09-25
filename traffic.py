@@ -57,9 +57,13 @@ def make_pair(a: Vehicle, b: Vehicle) -> tuple[Vehicle, Vehicle]:
 class Traffic:
     """Fait rouler `count` véhicules sur le réseau selon une conduite (règle par défaut)."""
 
-    def __init__(self, network: RoadNetwork, count: int, seed: int, policy=None):
+    def __init__(self, network: RoadNetwork, count: int, seed: int, policy=None,
+                 special=None):
         self.network = network
         self.policy = policy if policy is not None else RulePolicy()
+        # Conduites propres à certaines voitures : {numéro: conduite}. Ex. {0: arbre} = Alice
+        # conduit avec l'arbre, les autres avec self.policy (sert à comparer une seule voiture).
+        self.special = special or {}
         self.rng = random.Random(seed)
         self.time = 0.0
         self.start = network.get_start()
@@ -106,8 +110,8 @@ class Traffic:
             a.collisions += 1
             b.collisions += 1
             self.collision_events.append((self.time, a, b, (a.current, a.target, a.progress)))
-            self.policy.on_collision(self, a)
-            self.policy.on_collision(self, b)
+            self.policy_of(a).on_collision(self, a)
+            self.policy_of(b).on_collision(self, b)
         self.contacts = contacts
         self.previous = {v: ((v.current, v.target), v.progress) for v in rolling}
 
@@ -153,15 +157,20 @@ class Traffic:
         exits = self.get_exits(vehicle.current)
         if not exits:
             self.trip_times.append(self.time - vehicle.trip_start)
-            self.policy.on_arrival(self, vehicle)
+            self.policy_of(vehicle).on_arrival(self, vehicle)
             # Réseau simple : retour au START. Circuit : START du cadre suivant.
             vehicle.current = self.network.get_next_start(vehicle.current)
             vehicle.target = None
             if vehicle.current is self.start:
                 self.finish_lap(vehicle)
             return
-        vehicle.target, pace = self.policy.choose(self, vehicle, vehicle.current, exits)
+        policy = self.policy_of(vehicle)
+        vehicle.target, pace = policy.choose(self, vehicle, vehicle.current, exits)
         vehicle.speed = vehicle.base_speed * PACES[pace]
+
+    def policy_of(self, vehicle: Vehicle):
+        """Conduite de ce véhicule : la sienne s'il en a une, sinon celle de tout le monde."""
+        return self.special.get(vehicle.number, self.policy)
 
     def finish_lap(self, vehicle: Vehicle) -> None:
         """Un tour de plus, et peut-être un meilleur temps."""

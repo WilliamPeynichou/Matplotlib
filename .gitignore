@@ -16,3 +16,4 @@ Thumbs.db
 cours.txt
 .pytest_cache/
 .ruff_cache/
+data/
