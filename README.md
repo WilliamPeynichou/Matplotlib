@@ -42,9 +42,10 @@ La seed apparaît dans le titre et le terminal. Pour rejouer un réseau, mettre 
 | Contrôle | Rôle |
 |---|---|
 | **Seed** | champ texte : la seed du réseau affiché (entier de 0 à `MAX_SEED` = 99999). Ctrl+A (tout sélectionner), Ctrl+C (copier), Ctrl+V (coller). **Entrée** génère avec la seed écrite. |
-| **Randomize** | case cochée par défaut. Cochée : **Generate** tire une nouvelle seed. Décochée : **Generate** utilise la seed du champ. |
+| **Randomize** | interrupteur, activé par défaut (clic sur l'interrupteur ou sur son label). Activé : **Generate** tire une nouvelle seed. Désactivé : **Generate** utilise la seed du champ. |
 | **Generate** | génère un nouveau réseau avec les réglages des curseurs. Seed invalide : message sous le réseau, le réseau actuel est gardé. |
-| **Historique** (icône horloge) | petite fenêtre avec les seeds déjà générées, la plus récente en haut, la seed active surlignée. Chaque seed se sélectionne et se copie (Ctrl+C) ; **▶ Activer** la recharge (case Randomize décochée). |
+| **Historique** (icône horloge) | petite fenêtre avec les seeds déjà générées, la plus récente en haut, la seed active surlignée. Chaque seed se sélectionne et se copie (Ctrl+C) ; **Activer** la recharge (Randomize désactivé). Défilement à la molette. |
+| **Thème** (en haut à droite) | bascule mode sombre / clair (sombre au démarrage). Icône soleil en mode sombre, lune en mode clair. Le réseau n'est pas régénéré et les véhicules continuent où ils sont ; la fenêtre Historique change aussi de couleurs. Couleurs dans `THEMES`, thème de départ dans `DEFAULT_THEME` (`display.py`). |
 
 La seed reste affichée dans le titre et le terminal.
 
@@ -85,7 +86,7 @@ Grille invalide (`COLUMNS < 2` ou `ROWS < 1`) : le programme affiche un message 
 - Graphe de nodes et segments, cinq types de node.
 - Chemin principal et nombre réglable de routes secondaires.
 - Nombre d'intersections visé réglable ; génération cherche une solution proche.
-- Seed reproductible : champ Seed, case Randomize, bouton Generate, historique des seeds.
+- Seed reproductible : champ Seed, interrupteur Randomize, bouton Generate, historique des seeds.
 - Construction animée, routes courbes et légende.
 - Aspect organique : chaque node est légèrement décalé à l'écran (`JITTER` dans `display.py`), même seed = même forme. Le modèle reste une grille, donc les règles et les tests ne changent pas.
 - Toutes les routes rejoignent le END (aucun cul-de-sac).
