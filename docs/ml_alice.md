@@ -248,3 +248,11 @@ Mesure sans fenêtre (120 tours, moyenne de collisions par tour, par blocs de 20
 | seed 2 | 1,95 | 0,95 | 1,20 | 0,90 | 1,10 | 0,85 |
 
 ⚠️ **C'est bruité** : on a une seule voiture et peu de tours, alors il y a de bons et de mauvais tours. Il faut regarder la **tendance** (les 5 premiers tours comparés aux 5 derniers), pas un tour isolé. L'entraînement complet (`alice.py`, environ 4500 tours) donne une courbe plus propre : voir `alice_apprentissage.png`.
+
+## 12. Randomize : repartir de zéro ou garder la table
+
+- **Randomize** : nouveau circuit, voitures et compteurs neufs, Alice repart d'une table Q **vide** (`live`). Les anciennes collisions et les anciens tours disparaissent.
+- **Garder apprent.** : nouveau circuit, voitures et compteurs neufs, mais Alice garde **sa table Q** (`live`). Les décisions en cours de l'ancien circuit sont effacées : elles ne doivent pas influencer le nouveau. Epsilon reprend selon les tours du nouveau circuit (donc exploration au début), mais les connaissances restent.
+- Hors mode `live` : les deux boutons recréent le circuit et les compteurs ; le modèle pré-entraîné `rl` est rechargé depuis son fichier.
+
+Pour comparer l'apprentissage sur plusieurs circuits : bouton **Garder apprent.** Pour refaire l'expérience depuis zéro : bouton **Randomize**.

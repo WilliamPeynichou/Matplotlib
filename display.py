@@ -295,11 +295,14 @@ class NetworkView:
         self.vehicles_slider = Slider(self.fig.add_axes([0.25, 0.07, 0.45, 0.03]), "Véhicules",
                                       0, MAX_VEHICLES, valinit=self.settings["vehicles"],
                                       valstep=1)
-        self.button = Button(self.fig.add_axes([0.42, 0.01, 0.16, 0.045]), "Randomize")
+        self.button = Button(self.fig.add_axes([0.36, 0.01, 0.14, 0.045]), "Randomize")
+        self.keep_button = Button(self.fig.add_axes([0.51, 0.01, 0.23, 0.045]),
+                                  "Garder apprent.")
         self.roads_slider.on_changed(self.on_network_change)
         self.intersections_slider.on_changed(self.on_network_change)
         self.vehicles_slider.on_changed(self.on_vehicles_change)
         self.button.on_clicked(self.on_randomize)
+        self.keep_button.on_clicked(self.on_keep_learning)
         driving_ax = self.fig.add_axes([0.81, 0.03, 0.17, 0.17], frame_on=False)
         driving_ax.set_title("Conduite", fontsize=10, loc="left")
         self.driving_radio = RadioButtons(driving_ax, list(DRIVINGS.values()),
@@ -333,11 +336,18 @@ class NetworkView:
         self.seed = self.new_seed()
         self.regenerate()
 
-    def regenerate(self) -> None:
+    def on_keep_learning(self, event) -> None:
+        """Nouveau circuit, compteurs neufs, mais table Q d'Alice conservée."""
+        alice = self.traffic.vehicles[0] if self.traffic.vehicles else None
+        policy = self.traffic.policy_of(alice) if alice is not None else None
+        self.seed = self.new_seed()
+        self.regenerate(keep_policy=policy if self.settings.get("alice") == "live" else None)
+
+    def regenerate(self, keep_policy=None) -> None:
         """Génère le réseau puis rejoue sa construction."""
         self.intersections = self.generate(self.seed, self.settings["roads"],
                                            self.settings["intersections"])
-        self.restart(build=True)
+        self.restart(build=True, keep_policy=keep_policy)
 
     def start_traffic(self) -> None:
         """Relance les véhicules sans reconstruire le réseau."""
@@ -352,7 +362,7 @@ class NetworkView:
         return (f"seed {self.seed}  ·  routes {self.settings['roads']}  ·  "
                 f"intersections {intersections}")
 
-    def restart(self, build: bool) -> None:
+    def restart(self, build: bool, keep_policy=None) -> None:
         """Arrête l'animation en cours et en démarre une nouvelle."""
         if self.animation is not None:
             self.animation.stop()
@@ -371,7 +381,9 @@ class NetworkView:
             self.settings["driving"] = driving
             self.select_driving(driving)
         alice = self.settings.get("alice")
-        alice_policy = make_alice_policy(alice)
+        alice_policy = keep_policy if keep_policy is not None else make_alice_policy(alice)
+        if keep_policy is not None:
+            keep_policy.forget()  # décisions liées aux anciens véhicules : jamais réutilisées
         special = {0: alice_policy} if alice_policy is not None else None
         self.traffic = Traffic(self.network, self.settings["vehicles"], self.seed, policy,
                                special=special)

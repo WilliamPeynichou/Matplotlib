@@ -50,7 +50,9 @@ def get_state(traffic: Traffic, vehicle: Vehicle, node: Node,
               if other is not vehicle and other.target is not None]
     directions = [NO_EXIT, NO_EXIT, NO_EXIT]  # descendre, tout droit, monter
     for target in exits:
-        directions[target.y - node.y + 1] = get_exit_state(vehicle, node, target, others)
+        length = traffic.network.get_length(node, target) if vehicle.distance_aware else 1.0
+        directions[target.y - node.y + 1] = get_exit_state(vehicle, node, target, others,
+                                                        length)
     fast = 1 if vehicle.base_speed > SPEED else 0
     behind = 1 if any(other.target is node and 1 - other.progress < BEHIND_GAP
                       for other in others) else 0
@@ -70,9 +72,10 @@ def get_length_classes(traffic: Traffic, node: Node, exits: list[Node]) -> tuple
     return tuple(classes)
 
 
-def get_exit_state(vehicle: Vehicle, node: Node, target: Node, others: list[Vehicle]) -> int:
+def get_exit_state(vehicle: Vehicle, node: Node, target: Node, others: list[Vehicle],
+                   length: float = 1.0) -> int:
     """FREE, BUSY ou DANGER pour la sortie node -> target, vue à allure normale."""
-    my_arrival = 1 / vehicle.base_speed  # temps pour atteindre target à allure normale
+    my_arrival = length / vehicle.base_speed  # temps physique à allure normale
     state = FREE
     for other in others:
         if other.target is not target:
@@ -81,7 +84,7 @@ def get_exit_state(vehicle: Vehicle, node: Node, target: Node, others: list[Vehi
             if other.progress < CLOSE_GAP:
                 return DANGER
         else:  # sur une autre route qui rejoint le même node
-            other_arrival = (1 - other.progress) / other.speed
+            other_arrival = other.length * (1 - other.progress) / other.speed
             if abs(other_arrival - my_arrival) < MERGE_WINDOW:
                 return DANGER
         state = BUSY

@@ -4,6 +4,7 @@ import pytest
 
 from alice import ALICE, measure, train_alice
 from circuit import Circuit
+from display import NetworkView
 from learning import QAgent
 from policies import RulePolicy
 from traffic import Traffic
@@ -15,6 +16,43 @@ def rows():
     """Petit jeu d'exemples (3 circuits) : suffit pour tester, rapide."""
     return collect(3)
 
+
+
+
+def test_randomize_remet_apprentissage_et_stats_a_zero(monkeypatch):
+    """Nouveau circuit = nouvelle Alice, table vide et zéro tour/collision."""
+    import matplotlib.pyplot as plt
+
+    monkeypatch.setattr(plt, "show", lambda: None)
+    circuit = Circuit(10, 5)
+    settings = {"roads": 3, "intersections": 4, "vehicles": 3, "driving": "rule",
+                "alice": "live", "speedup": 1}
+    view = NetworkView(circuit, 1, settings,
+                       lambda seed, roads, intersections: circuit.generate(seed, roads,
+                                                                            intersections),
+                       lambda: 2)
+    try:
+        old = view.traffic.policy_of(view.traffic.vehicles[0])
+        old.q[(1,) * old.state_size] = [1.0] * 9
+        old.memory[view.traffic.vehicles[0]] = [None, 0, 0, 0]
+        view.traffic.vehicles[0].collisions = 5
+        view.traffic.vehicles[0].laps = 3
+        view.on_randomize(None)
+        new = view.traffic.policy_of(view.traffic.vehicles[0])
+        assert new is not old and new.q == {} and new.memory == {}
+        assert view.traffic.collisions == 0
+        assert all(v.collisions == 0 and v.laps == 0 and v.lap_collisions == []
+                   for v in view.traffic.vehicles)
+        new.q[(1,) * new.state_size] = [2.0] * 9
+        new.memory[view.traffic.vehicles[0]] = [None, 0, 0, 0]
+        view.on_keep_learning(None)
+        kept = view.traffic.policy_of(view.traffic.vehicles[0])
+        assert kept is new and kept.q == new.q and kept.memory == {}
+        assert view.traffic.collisions == 0
+        assert all(v.collisions == 0 and v.laps == 0 for v in view.traffic.vehicles)
+    finally:
+        view.animation.stop()
+        plt.close(view.fig)
 
 def test_seule_alice_a_une_conduite_speciale():
     circuit = Circuit(10, 5)
@@ -157,3 +195,29 @@ def test_alice_en_direct_apprend_tour_apres_tour():
         traffic.update(0.1)
     assert alice.q and alice.learning  # la table grandit en roulant
     assert MIN_EPSILON <= alice.epsilon < 1  # moins de hasard après chaque tour
+
+
+def test_anticipation_utilise_longueurs_physiques():
+    from learning import BUSY, DANGER, get_exit_state
+    from models import Node
+    from traffic import Vehicle
+    start, other_start, target = Node(0, 1), Node(0, 0), Node(1, 1)
+    alice = Vehicle(0, start, 0, base_speed=1)
+    other = Vehicle(1, other_start, 0, base_speed=1)
+    other.current, other.target = other_start, target
+    other.speed, other.length, other.progress = 1, 2, 0
+    assert get_exit_state(alice, start, target, [other], length=2) == DANGER
+    assert get_exit_state(alice, start, target, [other], length=1) == BUSY
+
+
+def test_laboratoire_groupes_et_foret():
+    from ml_lab import collect_groups, fit_models, summarize
+    train, groups = collect_groups([10000, 10001])
+    validation, validation_groups = collect_groups([5000])
+    assert set(groups).isdisjoint(validation_groups)
+    models, reports = fit_models(train, validation)
+    assert set(models) == {"Arbre", "Forêt"}
+    assert 0 <= reports["Forêt"]["f1_collision"] <= 1
+    stats = summarize([{"conduite": "Règle", "collisions_min": v, "tours": 1,
+                        "carburant_distance": 1} for v in (2, 4)])
+    assert stats["Règle"]["collisions_min"]["moyenne"] == 3

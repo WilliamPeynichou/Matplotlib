@@ -152,7 +152,8 @@ Guide pas à pas pour débutant : `docs/ml_alice.md`. Choix dans `main.py` : `AL
 | `test_learning.py` | tests pytest de l'apprentissage |
 | `run_checks.sh` | QA en une commande |
 
-Voir [docs/architecture.md](docs/architecture.md) et [docs/](docs/README.md).
+Voir [docs/architecture.md](docs/architecture.md), le
+[guide scientifique ML](docs/litterature_ml.md) et [docs/](docs/README.md).
 
 ## Équipe
 
@@ -166,4 +167,6 @@ Voir [docs/architecture.md](docs/architecture.md) et [docs/](docs/README.md).
 
 - Support de cours « Bootcamp Python B3 » – Alexandre Coirier.
 - Matplotlib : animation, widgets, tracés et patches.
+- Fondements ML et bibliographie commentée :
+  [docs/litterature_ml.md](docs/litterature_ml.md).
 - Assistance IA utilisée et code relu par l'équipe.
